@@ -1,4 +1,4 @@
-<%- include('../layouts/main', { hideNavbar: true, title: 'Login' }) %>
+<%- /* Este arquivo usa o layout principal definido no app.js */ %>
 
 <div class="row justify-content-center">
     <div class="col-md-6">
@@ -12,7 +12,7 @@
             <div class="card-body p-4">
                 <h5 class="mb-4 text-center">Acesso ao Sistema</h5>
 
-                <% if (error) { %>
+                <% if (typeof error !== 'undefined' && error) { %>
                     <div class="alert alert-danger">
                         <%= error %>
                     </div>

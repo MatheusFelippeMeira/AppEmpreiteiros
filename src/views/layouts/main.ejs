@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= title %> | App Empreiteiros</title>
+    <title><%= typeof title !== 'undefined' ? title : 'App Empreiteiros' %> | App Empreiteiros</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/css/styles.css">
@@ -17,16 +17,16 @@
     <% } %>
 
     <main class="container mt-4">
-        <% if (typeof error !== 'undefined' && error) { %>
+        <% if (typeof error_msg !== 'undefined' && error_msg.length > 0) { %>
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <%= error %>
+                <%= error_msg %>
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
             </div>
         <% } %>
 
-        <% if (typeof success !== 'undefined' && success) { %>
+        <% if (typeof success_msg !== 'undefined' && success_msg.length > 0) { %>
             <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <%= success %>
+                <%= success_msg %>
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
             </div>
         <% } %>

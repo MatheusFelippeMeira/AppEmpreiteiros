@@ -55,12 +55,17 @@
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-user me-1"></i>
-                        <%= typeof user !== 'undefined' ? user.nome : 'Usuário' %>
+                        <%= (user && user.nome) ? user.nome : 'Usuário' %>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                        <% if (user) { %>
                         <li><a class="dropdown-item" href="/auth/perfil">Meu Perfil</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="/auth/logout">Sair</a></li>
+                        <% } else { %>
+                        <li><a class="dropdown-item" href="/auth/login">Entrar</a></li>
+                        <li><a class="dropdown-item" href="/auth/registro">Registrar</a></li>
+                        <% } %>
                     </ul>
                 </li>
             </ul>

@@ -1,4 +1,4 @@
-<%- include('layouts/main', { title: title || 'Erro' }) %>
+<%- /* Note: este arquivo usa o layout padrão definido no app.js */ %>
 
 <div class="container">
   <div class="row justify-content-center">
@@ -9,10 +9,10 @@
             <i class="fas fa-exclamation-circle text-danger" style="font-size: 5rem;"></i>
           </div>
           
-          <h2 class="card-title mb-3"><%= title || 'Erro' %></h2>
-          <p class="card-text mb-4"><%= message || 'Ocorreu um erro inesperado.' %></p>
+          <h2 class="card-title mb-3"><%= typeof title !== 'undefined' ? title : 'Erro' %></h2>
+          <p class="card-text mb-4"><%= typeof message !== 'undefined' ? message : 'Ocorreu um erro inesperado.' %></p>
           
-          <% if (process.env.NODE_ENV === 'development' && typeof error !== 'undefined' && error.stack) { %>
+          <% if (process.env.NODE_ENV === 'development' && typeof error !== 'undefined' && error && error.stack) { %>
             <div class="text-start mt-4">
               <div class="alert alert-secondary">
                 <h6>Detalhes do erro (visível apenas em ambiente de desenvolvimento):</h6>

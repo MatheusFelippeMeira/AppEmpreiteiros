@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const helmet = require('helmet');
 const compression = require('compression');
 const { Pool } = require('pg');
+const ejsLayouts = require('express-ejs-layouts');
 
 // Importação de rotas
 const authRoutes = require('./src/routes/auth');
@@ -24,6 +25,8 @@ const PORT = process.env.PORT || 3000;
 // View engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'src/views'));
+app.use(ejsLayouts);
+app.set('layout', 'layouts/main');
 
 // Middlewares
 app.use(express.json());
@@ -47,54 +50,52 @@ if (isDev) {
   sessionConfig = {
     secret: process.env.SESSION_SECRET || 'app_empreiteiros_secret',
     resave: false,
-    saveUninitialized: false,
+    saveUninitialized: true,
     cookie: {
       maxAge: 1000 * 60 * 60 * 24 // 24 horas
     }
   };
 } else {
-  // Configuração para produção com PostgreSQL
+  // Configuração para produção
   try {
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 10000, // 10 segundos de timeout para conexão
-      max: 20, // limite máximo de conexões no pool
-      idleTimeoutMillis: 30000 // tempo máximo de inatividade de uma conexão
+      ssl: { rejectUnauthorized: false }
     });
     
-    // Teste rápido de conexão
+    // Testar conexão
     pool.query('SELECT NOW()')
       .then(() => console.log('✅ Banco de dados conectado com sucesso'))
-      .catch(err => console.error('⚠️ Aviso: Erro ao testar conexão com o banco de dados:', err.message));
+      .catch(err => console.error('⚠️ Erro na conexão com o banco de dados:', err.message));
     
+    // Mesmo que dê erro na consulta acima, tentamos configurar o store
+    // Se falhar, o catch abaixo pega o erro
     sessionConfig = {
       store: new PgSession({
         pool,
-        tableName: 'session', // Tabela para armazenar sessões
-        createTableIfMissing: true // Cria a tabela se não existir
+        tableName: 'session',
+        createTableIfMissing: true
       }),
       secret: process.env.SESSION_SECRET || 'app_empreiteiros_secret_production',
       resave: false,
-      saveUninitialized: false,
+      saveUninitialized: true,
       cookie: {
         maxAge: 1000 * 60 * 60 * 24, // 24 horas
-        secure: true,
+        secure: process.env.NODE_ENV === 'production' && !isDev,
         httpOnly: true
       }
     };
   } catch (error) {
-    console.error('❌ Erro ao configurar sessão com PostgreSQL:', error);
-    console.log('⚠️ Utilizando configuração de sessão em memória como fallback...');
+    // Em caso de erro na configuração, usar sessão em memória
+    console.error('❌ Erro ao configurar sessão com PostgreSQL. Usando sessão em memória:', error.message);
     
-    // Configuração fallback em caso de erro
     sessionConfig = {
       secret: process.env.SESSION_SECRET || 'app_empreiteiros_secret_fallback',
       resave: false,
-      saveUninitialized: false,
+      saveUninitialized: true,
       cookie: {
         maxAge: 1000 * 60 * 60 * 24, // 24 horas
-        secure: false // Desativa secure cookie em caso de fallback
+        secure: false
       }
     };
   }
@@ -108,6 +109,8 @@ app.use((req, res, next) => {
   res.locals.user = req.session.user || null;
   res.locals.success_msg = req.flash('success_msg');
   res.locals.error_msg = req.flash('error_msg');
+  // Configurando variáveis padrão para todos os templates
+  res.locals.title = 'App Empreiteiros';
   next();
 });
 
@@ -167,6 +170,7 @@ app.get('/', (req, res) => {
 
 // Middleware de tratamento de erros
 app.use((req, res) => {
+  console.log(`404 | Rota não encontrada: ${req.method} ${req.originalUrl}`);
   res.status(404).render('error', {
     title: 'Página não encontrada',
     message: 'A página que você está procurando não existe.'
@@ -174,10 +178,26 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  // Log detalhado do erro
+  console.error('==================== ERRO DO SERVIDOR ====================');
+  console.error(`Timestamp: ${new Date().toISOString()}`);
+  console.error(`Rota: ${req.method} ${req.originalUrl}`);
+  console.error(`Usuário: ${req.session?.user?.id || 'Não autenticado'}`);
+  console.error(`Erro: ${err.message}`);
+  console.error(`Stack: ${err.stack}`);
+  
+  // Tentar capturar informações adicionais do erro
+  if (err.code) console.error(`Código do erro: ${err.code}`);
+  if (err.errno) console.error(`Errno: ${err.errno}`);
+  if (err.syscall) console.error(`Syscall: ${err.syscall}`);
+  if (err.address) console.error(`Endereço: ${err.address}`);
+  if (err.port) console.error(`Porta: ${err.port}`);
+  console.error('=========================================================');
+  
+  // Renderizar página de erro para o usuário
   res.status(500).render('error', {
     title: 'Erro no servidor',
-    message: isDev ? err.message : 'Ocorreu um erro no servidor.'
+    message: isDev ? err.message : 'Ocorreu um erro no servidor. Nossa equipe foi notificada.'
   });
 });
 
