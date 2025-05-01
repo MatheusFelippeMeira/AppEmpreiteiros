@@ -4,7 +4,7 @@ services:
     env: node
     plan: starter
     region: sao1 # Região em São Paulo para melhor latência no Brasil
-    buildCommand: npm install
+    buildCommand: npm ci --production
     startCommand: npm start
     healthCheckPath: /health
     autoDeploy: true
