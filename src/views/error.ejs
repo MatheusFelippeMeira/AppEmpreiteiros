@@ -1,0 +1,39 @@
+<%- include('layouts/main', { title: title || 'Erro' }) %>
+
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-8 mt-5">
+      <div class="card shadow border-0">
+        <div class="card-body text-center p-5">
+          <div class="mb-4">
+            <i class="fas fa-exclamation-circle text-danger" style="font-size: 5rem;"></i>
+          </div>
+          
+          <h2 class="card-title mb-3"><%= title || 'Erro' %></h2>
+          <p class="card-text mb-4"><%= message || 'Ocorreu um erro inesperado.' %></p>
+          
+          <% if (process.env.NODE_ENV === 'development' && typeof error !== 'undefined' && error.stack) { %>
+            <div class="text-start mt-4">
+              <div class="alert alert-secondary">
+                <h6>Detalhes do erro (visível apenas em ambiente de desenvolvimento):</h6>
+                <pre class="mb-0 text-danger"><%= error.stack %></pre>
+              </div>
+            </div>
+          <% } %>
+          
+          <div class="mt-4">
+            <a href="/" class="btn btn-primary">
+              <i class="fas fa-home me-2"></i>
+              Voltar para o Dashboard
+            </a>
+            
+            <button onclick="window.history.back()" class="btn btn-outline-secondary ms-2">
+              <i class="fas fa-arrow-left me-2"></i>
+              Voltar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

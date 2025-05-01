@@ -1,0 +1,188 @@
+/* Estilos Gerais */
+:root {
+  --primary-color: #0d6efd;
+  --secondary-color: #6c757d;
+  --success-color: #198754;
+  --info-color: #0dcaf0;
+  --warning-color: #ffc107;
+  --danger-color: #dc3545;
+  --dark-color: #212529;
+  --light-color: #f8f9fa;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 60px;
+}
+
+/* Ajustes para o layout mobile */
+@media (max-width: 768px) {
+  .card-body {
+    padding: 0.75rem;
+  }
+  
+  .container {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  
+  .table-responsive {
+    font-size: 0.9rem;
+  }
+}
+
+/* Melhorias para página de login e registro */
+.auth-card {
+  max-width: 500px;
+  margin: 50px auto;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Dashboard */
+.stats-card {
+  transition: transform 0.3s ease;
+  cursor: pointer;
+}
+
+.stats-card:hover {
+  transform: translateY(-5px);
+}
+
+/* Tabelas */
+.table td, .table th {
+  vertical-align: middle;
+}
+
+.table-hover tbody tr:hover {
+  background-color: rgba(13, 110, 253, 0.05);
+}
+
+.actions-column {
+  width: 120px;
+  text-align: center;
+}
+
+/* Cards */
+.card {
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 3px rgba(0,0,0,0.05);
+  margin-bottom: 1.5rem;
+}
+
+.card-header {
+  background-color: rgba(0,0,0,0.02);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  padding: 1rem;
+}
+
+/* Formulários */
+.form-control:focus, .form-select:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.required-field::after {
+  content: " *";
+  color: var(--danger-color);
+  font-weight: bold;
+}
+
+/* Progress bars */
+.progress {
+  height: 0.8rem;
+  border-radius: 0.5rem;
+}
+
+/* Footer */
+.footer {
+  margin-top: auto;
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  box-shadow: 0 -2px 5px rgba(0,0,0,0.05);
+}
+
+/* Utilitários */
+.text-truncate-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Status tags */
+.status-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 50rem;
+  font-weight: bold;
+  font-size: 0.8rem;
+}
+
+.status-em-andamento {
+  background-color: rgba(13, 110, 253, 0.1);
+  color: var(--primary-color);
+}
+
+.status-concluido {
+  background-color: rgba(25, 135, 84, 0.1);
+  color: var(--success-color);
+}
+
+.status-pendente {
+  background-color: rgba(255, 193, 7, 0.1);
+  color: #856404;
+}
+
+.status-cancelado {
+  background-color: rgba(220, 53, 69, 0.1);
+  color: var(--danger-color);
+}
+
+/* Gráficos */
+.chart-container {
+  position: relative;
+  height: 300px;
+  width: 100%;
+}
+
+/* Botões flutuantes para dispositivos móveis */
+@media (max-width: 768px) {
+  .floating-action-btn {
+    position: fixed;
+    bottom: 70px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .floating-action-btn i {
+    font-size: 1.5rem;
+  }
+}
+
+/* Ajustes para impressão de relatórios */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .card {
+    border: none;
+    box-shadow: none;
+  }
+}
