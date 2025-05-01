@@ -19,6 +19,7 @@
   "dependencies": {
     "bcrypt": "^5.1.1",
     "compression": "^1.7.4",
+    "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "ejs": "^3.1.9",
@@ -30,6 +31,8 @@
     "mkdirp": "^3.0.1",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
+    "openai": "^3.3.0",
+    "pg": "^8.15.6",
     "sqlite3": "^5.1.6"
   },
   "devDependencies": {

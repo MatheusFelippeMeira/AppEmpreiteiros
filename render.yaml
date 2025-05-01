@@ -2,22 +2,32 @@ services:
   - type: web
     name: app-empreiteiros
     env: node
+    plan: starter
+    region: sao1 # Região em São Paulo para melhor latência no Brasil
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
     autoDeploy: true
+    disk:
+      name: uploads
+      mountPath: /workspaces/AppEmpreiteiros/src/public/uploads
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 10000
+        value: 3000
       - key: SESSION_SECRET
         generateValue: true
-      - key: ADMIN_EMAIL
-        sync: false
-      - key: ADMIN_PASSWORD
-        sync: false
-    disk:
-      name: data
-      mountPath: /data
-      sizeGB: 1
+      - key: DATABASE_URL
+        fromDatabase:
+          name: app-empreiteiros-db
+          property: connectionString
+      - key: UPLOADS_FOLDER
+        value: /workspaces/AppEmpreiteiros/src/public/uploads
+
+  - type: postgres
+    name: app-empreiteiros-db
+    plan: free
+    region: sao1 # Região em São Paulo para melhor latência no Brasil
+    ipAllowList: [] # Permitir todas as origens
