@@ -54,25 +54,50 @@ if (isDev) {
   };
 } else {
   // Configuração para produção com PostgreSQL
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-  });
-  
-  sessionConfig = {
-    store: new PgSession({
-      pool,
-      tableName: 'session' // Tabela para armazenar sessões
-    }),
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      maxAge: 1000 * 60 * 60 * 24, // 24 horas
-      secure: true,
-      httpOnly: true
-    }
-  };
+  try {
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 10000, // 10 segundos de timeout para conexão
+      max: 20, // limite máximo de conexões no pool
+      idleTimeoutMillis: 30000 // tempo máximo de inatividade de uma conexão
+    });
+    
+    // Teste rápido de conexão
+    pool.query('SELECT NOW()')
+      .then(() => console.log('✅ Banco de dados conectado com sucesso'))
+      .catch(err => console.error('⚠️ Aviso: Erro ao testar conexão com o banco de dados:', err.message));
+    
+    sessionConfig = {
+      store: new PgSession({
+        pool,
+        tableName: 'session', // Tabela para armazenar sessões
+        createTableIfMissing: true // Cria a tabela se não existir
+      }),
+      secret: process.env.SESSION_SECRET || 'app_empreiteiros_secret_production',
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        maxAge: 1000 * 60 * 60 * 24, // 24 horas
+        secure: true,
+        httpOnly: true
+      }
+    };
+  } catch (error) {
+    console.error('❌ Erro ao configurar sessão com PostgreSQL:', error);
+    console.log('⚠️ Utilizando configuração de sessão em memória como fallback...');
+    
+    // Configuração fallback em caso de erro
+    sessionConfig = {
+      secret: process.env.SESSION_SECRET || 'app_empreiteiros_secret_fallback',
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        maxAge: 1000 * 60 * 60 * 24, // 24 horas
+        secure: false // Desativa secure cookie em caso de fallback
+      }
+    };
+  }
 }
 
 app.use(session(sessionConfig));
@@ -86,9 +111,41 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check para o Render
+// Health check melhorado para o Render
 app.get('/health', (req, res) => {
-  res.status(200).send('OK');
+  // Informações básicas de saúde do aplicativo
+  const healthInfo = {
+    status: 'up',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: isDev ? 'development' : 'production',
+    memory: process.memoryUsage(),
+  };
+  
+  // Verificando conexão com o banco de dados
+  if (!isDev) {
+    const healthCheckPool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 5000 // 5 segundos de timeout para health check
+    });
+    
+    healthCheckPool.query('SELECT 1')
+      .then(() => {
+        healthInfo.database = 'connected';
+        res.status(200).json(healthInfo);
+        healthCheckPool.end();
+      })
+      .catch(err => {
+        healthInfo.database = 'disconnected';
+        healthInfo.databaseError = err.message;
+        // Ainda retornamos 200 para evitar que o Render reinicie desnecessariamente
+        res.status(200).json(healthInfo);
+        healthCheckPool.end();
+      });
+  } else {
+    res.status(200).json(healthInfo);
+  }
 });
 
 // Rotas
@@ -126,9 +183,38 @@ app.use((err, req, res, next) => {
 
 // Inicialização do servidor
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Servidor rodando em http://localhost:${PORT} no modo ${isDev ? 'desenvolvimento' : 'produção'}`);
-  });
+  // Testar a conexão com o banco de dados antes de iniciar o servidor
+  if (!isDev) {
+    const testPool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+    
+    testPool.connect()
+      .then(client => {
+        console.log('Conexão com o banco de dados estabelecida com sucesso!');
+        client.release();
+        
+        // Iniciar o servidor após confirmar conexão com o banco
+        app.listen(PORT, '0.0.0.0', () => {
+          console.log(`Servidor rodando em http://localhost:${PORT} no modo ${isDev ? 'desenvolvimento' : 'produção'}`);
+        });
+      })
+      .catch(err => {
+        console.error('Erro na conexão com o banco de dados:', err);
+        console.log('Tentando iniciar o servidor mesmo assim...');
+        
+        // Tentar iniciar o servidor mesmo com erro na conexão com o banco
+        app.listen(PORT, '0.0.0.0', () => {
+          console.log(`Servidor rodando em http://localhost:${PORT} no modo ${isDev ? 'desenvolvimento' : 'produção'} (Aviso: problemas na conexão com o banco de dados)`);
+        });
+      });
+  } else {
+    // Em desenvolvimento, iniciar normalmente
+    app.listen(PORT, () => {
+      console.log(`Servidor rodando em http://localhost:${PORT} no modo ${isDev ? 'desenvolvimento' : 'produção'}`);
+    });
+  }
 }
 
 module.exports = app;

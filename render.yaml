@@ -7,10 +7,13 @@ services:
     buildCommand: npm ci --production
     startCommand: npm start
     healthCheckPath: /health
+    healthCheckTimeout: 60 # Aumentado para 60 segundos
     autoDeploy: true
+    numInstances: 1 # Número de instâncias
+    # Configurações para estabilidade
     disk:
       name: uploads
-      mountPath: /workspaces/AppEmpreiteiros/src/public/uploads
+      mountPath: /opt/render/project/src/src/public/uploads
       sizeGB: 1
     envVars:
       - key: NODE_ENV
@@ -24,10 +27,22 @@ services:
           name: app-empreiteiros-db
           property: connectionString
       - key: UPLOADS_FOLDER
-        value: /workspaces/AppEmpreiteiros/src/public/uploads
+        value: /opt/render/project/src/src/public/uploads
+    # Configurações de inicialização e reinicialização automática
+    scaling:
+      minInstances: 1
+      maxInstances: 1
+      targetMemoryPercent: 80
+      targetCPUPercent: 80
+    startupTimeout: 120
+    autoscaling: false
 
   - type: postgres
     name: app-empreiteiros-db
     plan: free
     region: sao1 # Região em São Paulo para melhor latência no Brasil
     ipAllowList: [] # Permitir todas as origens
+    # Configuração do PostgreSQL
+    version: "15"
+    postgresMajorVersion: 15
+    diskSize: 1024 # 1GB
