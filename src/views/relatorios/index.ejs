@@ -1,0 +1,204 @@
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>
+                    Relatórios
+                </h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Escolha o tipo de relatório que deseja gerar:</p>
+                
+                <div class="row">
+                    <!-- Relatório Financeiro -->
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-money-bill-wave text-success me-2"></i>
+                                    Relatório Financeiro
+                                </h5>
+                                <p class="card-text">Visualize receitas, despesas e lucros por período.</p>
+                                <a href="/relatorios/financeiro" class="btn btn-outline-primary">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    Gerar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Relatório de Projetos -->
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-project-diagram text-info me-2"></i>
+                                    Relatório de Projetos
+                                </h5>
+                                <p class="card-text">Acompanhe o status e progresso de todos os projetos.</p>
+                                <a href="/relatorios/projetos" class="btn btn-outline-primary">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    Gerar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Relatório de Funcionários -->
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-users text-warning me-2"></i>
+                                    Relatório de Funcionários
+                                </h5>
+                                <p class="card-text">Analise o desempenho e os custos com mão de obra.</p>
+                                <a href="/relatorios/funcionarios" class="btn btn-outline-primary">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    Gerar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <!-- Relatório de Clientes -->
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-handshake text-danger me-2"></i>
+                                    Relatório de Clientes
+                                </h5>
+                                <p class="card-text">Veja os projetos e a lucratividade por cliente.</p>
+                                <a href="/relatorios/clientes" class="btn btn-outline-primary">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    Gerar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Análise de Gastos -->
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-search-dollar text-success me-2"></i>
+                                    Análise de Gastos
+                                </h5>
+                                <p class="card-text">Identifique padrões e oportunidades de economia.</p>
+                                <a href="/relatorios/gastos" class="btn btn-outline-primary">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    Gerar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Previsão de Receita -->
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-chart-line text-primary me-2"></i>
+                                    Previsão de Receita
+                                </h5>
+                                <p class="card-text">Projete receitas futuras baseadas em dados históricos.</p>
+                                <a href="/relatorios/previsao" class="btn btn-outline-primary">
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    Gerar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Filtros globais para relatórios -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-filter me-2"></i>
+                                    Filtros para Relatórios
+                                </h5>
+                                <form id="filtrosForm" class="row g-3">
+                                    <div class="col-md-4">
+                                        <label for="dataInicio" class="form-label">Data Inicial:</label>
+                                        <input type="date" class="form-control" id="dataInicio" name="dataInicio">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="dataFim" class="form-label">Data Final:</label>
+                                        <input type="date" class="form-control" id="dataFim" name="dataFim">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="formatoExportacao" class="form-label">Formato de Exportação:</label>
+                                        <select class="form-select" id="formatoExportacao" name="formatoExportacao">
+                                            <option value="pdf">PDF</option>
+                                            <option value="excel">Excel</option>
+                                            <option value="csv">CSV</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-12 text-end mt-3">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-save me-1"></i>
+                                            Salvar Filtros
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Definir data atual e data inicial (30 dias atrás) como padrão
+    const hoje = new Date();
+    const dataInicio = new Date();
+    dataInicio.setDate(hoje.getDate() - 30);
+    
+    document.getElementById('dataInicio').value = dataInicio.toISOString().split('T')[0];
+    document.getElementById('dataFim').value = hoje.toISOString().split('T')[0];
+    
+    // Aplicar os filtros aos links de relatórios
+    document.getElementById('filtrosForm').addEventListener('submit', function(event) {
+        event.preventDefault();
+        const dataInicio = document.getElementById('dataInicio').value;
+        const dataFim = document.getElementById('dataFim').value;
+        const formato = document.getElementById('formatoExportacao').value;
+        
+        const links = document.querySelectorAll('.card-body a.btn-outline-primary');
+        links.forEach(function(link) {
+            const href = link.getAttribute('href');
+            const novoHref = `${href}?dataInicio=${dataInicio}&dataFim=${dataFim}&formato=${formato}`;
+            link.setAttribute('href', novoHref);
+        });
+        
+        // Salvar preferências no localStorage
+        localStorage.setItem('relatoriosDataInicio', dataInicio);
+        localStorage.setItem('relatoriosDataFim', dataFim);
+        localStorage.setItem('relatoriosFormato', formato);
+        
+        alert('Filtros aplicados com sucesso!');
+    });
+    
+    // Carregar preferências do localStorage
+    if (localStorage.getItem('relatoriosDataInicio')) {
+        document.getElementById('dataInicio').value = localStorage.getItem('relatoriosDataInicio');
+    }
+    if (localStorage.getItem('relatoriosDataFim')) {
+        document.getElementById('dataFim').value = localStorage.getItem('relatoriosDataFim');
+    }
+    if (localStorage.getItem('relatoriosFormato')) {
+        document.getElementById('formatoExportacao').value = localStorage.getItem('relatoriosFormato');
+    }
+});
+</script>

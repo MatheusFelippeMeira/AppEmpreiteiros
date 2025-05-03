@@ -1,0 +1,470 @@
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    <i class="fas fa-building me-2"></i>
+                    <%= projeto.nome %>
+                </h4>
+                <div>
+                    <a href="/projetos/<%= projeto.id %>/editar" class="btn btn-light btn-sm me-2">
+                        <i class="fas fa-edit me-1"></i>
+                        Editar
+                    </a>
+                    <% if (projeto.status === 'em_andamento') { %>
+                        <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalFinalizarProjeto">
+                            <i class="fas fa-check me-1"></i>
+                            Finalizar
+                        </button>
+                    <% } %>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="border-bottom pb-2">Informações Gerais</h5>
+                        <table class="table table-borderless">
+                            <tr>
+                                <th width="30%">Cliente:</th>
+                                <td><%= projeto.cliente_nome || 'N/A' %></td>
+                            </tr>
+                            <tr>
+                                <th>Localidade:</th>
+                                <td><%= projeto.localidade %></td>
+                            </tr>
+                            <tr>
+                                <th>Tipo:</th>
+                                <td>
+                                    <% if (projeto.tipo === 'residencial') { %>
+                                        Residencial
+                                    <% } else if (projeto.tipo === 'comercial') { %>
+                                        Comercial
+                                    <% } else if (projeto.tipo === 'industrial') { %>
+                                        Industrial
+                                    <% } else if (projeto.tipo === 'reforma') { %>
+                                        Reforma
+                                    <% } else { %>
+                                        Outros
+                                    <% } %>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Status:</th>
+                                <td>
+                                    <% if (projeto.status === 'em_andamento') { %>
+                                        <span class="badge bg-primary">Em andamento</span>
+                                    <% } else if (projeto.status === 'concluido') { %>
+                                        <span class="badge bg-success">Concluído</span>
+                                    <% } else if (projeto.status === 'cancelado') { %>
+                                        <span class="badge bg-danger">Cancelado</span>
+                                    <% } else { %>
+                                        <span class="badge bg-secondary">Indefinido</span>
+                                    <% } %>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h5 class="border-bottom pb-2">Datas e Valores</h5>
+                        <table class="table table-borderless">
+                            <tr>
+                                <th width="30%">Data de Início:</th>
+                                <td><%= new Date(projeto.data_inicio).toLocaleDateString('pt-BR') %></td>
+                            </tr>
+                            <tr>
+                                <th>Prazo Previsto:</th>
+                                <td>
+                                    <% if (projeto.data_fim_prevista) { %>
+                                        <%= new Date(projeto.data_fim_prevista).toLocaleDateString('pt-BR') %>
+                                    <% } else { %>
+                                        N/A
+                                    <% } %>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Data Conclusão:</th>
+                                <td>
+                                    <% if (projeto.data_fim_real) { %>
+                                        <%= new Date(projeto.data_fim_real).toLocaleDateString('pt-BR') %>
+                                    <% } else { %>
+                                        Em aberto
+                                    <% } %>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Valor a Receber:</th>
+                                <td>R$ <%= (projeto.valor_receber || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Resumo Financeiro -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <h5 class="border-bottom pb-2">Resumo Financeiro</h5>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-subtitle text-muted">Receita</h6>
+                                <h4 class="mt-2">R$ <%= (lucratividade.valor_receber || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-subtitle text-muted">Gastos com Materiais</h6>
+                                <h4 class="mt-2">R$ <%= (lucratividade.total_gastos || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-subtitle text-muted">Mão de Obra</h6>
+                                <h4 class="mt-2">R$ <%= (lucratividade.custo_mao_obra || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-subtitle text-muted">Lucro</h6>
+                                <% 
+                                    const lucro = (lucratividade.valor_receber || 0) - 
+                                                 (lucratividade.total_gastos || 0) - 
+                                                 (lucratividade.custo_mao_obra || 0);
+                                    const textClass = lucro >= 0 ? 'text-success' : 'text-danger';
+                                %>
+                                <h4 class="mt-2 <%= textClass %>">R$ <%= lucro.toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Abas para Gastos e Trabalhos -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <ul class="nav nav-tabs" id="projetoTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="gastos-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#gastos" type="button" role="tab" aria-selected="true">
+                                    Gastos
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="trabalhos-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#trabalhos" type="button" role="tab" aria-selected="false">
+                                    Trabalhos
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content p-3 border border-top-0 rounded-bottom bg-white">
+                            <!-- Aba de Gastos -->
+                            <div class="tab-pane fade show active" id="gastos" role="tabpanel">
+                                <div class="d-flex justify-content-between mb-3">
+                                    <h5>Gastos do Projeto</h5>
+                                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalRegistrarGasto">
+                                        <i class="fas fa-plus me-1"></i>
+                                        Registrar Gasto
+                                    </button>
+                                </div>
+                                
+                                <% if (gastos && gastos.length > 0) { %>
+                                    <div class="table-responsive">
+                                        <table class="table table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Data</th>
+                                                    <th>Categoria</th>
+                                                    <th>Descrição</th>
+                                                    <th>Valor</th>
+                                                    <th>Comprovante</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <% gastos.forEach(function(gasto) { %>
+                                                    <tr>
+                                                        <td><%= new Date(gasto.data).toLocaleDateString('pt-BR') %></td>
+                                                        <td><%= gasto.categoria %></td>
+                                                        <td><%= gasto.descricao %></td>
+                                                        <td>R$ <%= gasto.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></td>
+                                                        <td>
+                                                            <% if (gasto.comprovante_url) { %>
+                                                                <a href="<%= gasto.comprovante_url %>" target="_blank" class="btn btn-sm btn-outline-info">
+                                                                    <i class="fas fa-file-invoice"></i>
+                                                                </a>
+                                                            <% } else { %>
+                                                                <span class="badge bg-secondary">Não</span>
+                                                            <% } %>
+                                                        </td>
+                                                    </tr>
+                                                <% }); %>
+                                            </tbody>
+                                            <tfoot>
+                                                <tr class="table-info">
+                                                    <th colspan="3">Total</th>
+                                                    <th colspan="2">
+                                                        R$ <%= 
+                                                            gastos.reduce((total, gasto) => total + gasto.valor, 0)
+                                                                  .toLocaleString('pt-BR', {minimumFractionDigits: 2})
+                                                        %>
+                                                    </th>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                <% } else { %>
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        Nenhum gasto registrado para este projeto.
+                                    </div>
+                                <% } %>
+                            </div>
+
+                            <!-- Aba de Trabalhos -->
+                            <div class="tab-pane fade" id="trabalhos" role="tabpanel">
+                                <div class="d-flex justify-content-between mb-3">
+                                    <h5>Trabalhos Realizados</h5>
+                                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalRegistrarTrabalho">
+                                        <i class="fas fa-plus me-1"></i>
+                                        Registrar Trabalho
+                                    </button>
+                                </div>
+                                
+                                <% if (trabalhos && trabalhos.length > 0) { %>
+                                    <div class="table-responsive">
+                                        <table class="table table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Data</th>
+                                                    <th>Funcionário</th>
+                                                    <th>Dias</th>
+                                                    <th>Horas Extras</th>
+                                                    <th>Tipo</th>
+                                                    <th>Valor</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <% trabalhos.forEach(function(trabalho) { %>
+                                                    <tr>
+                                                        <td><%= new Date(trabalho.data).toLocaleDateString('pt-BR') %></td>
+                                                        <td><%= trabalho.funcionario_nome %></td>
+                                                        <td><%= trabalho.dias_trabalhados %></td>
+                                                        <td><%= trabalho.horas_extras %></td>
+                                                        <td>
+                                                            <% if (trabalho.empreitada == 1) { %>
+                                                                <span class="badge bg-info">Empreitada</span>
+                                                            <% } else { %>
+                                                                <span class="badge bg-warning text-dark">Diária</span>
+                                                            <% } %>
+                                                        </td>
+                                                        <td>
+                                                            <% if (trabalho.empreitada == 1) { %>
+                                                                R$ <%= trabalho.valor_empreitada.toLocaleString('pt-BR', {minimumFractionDigits: 2}) %>
+                                                            <% } else { %>
+                                                                Calculado por diária
+                                                            <% } %>
+                                                        </td>
+                                                    </tr>
+                                                <% }); %>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <% } else { %>
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        Nenhum trabalho registrado para este projeto.
+                                    </div>
+                                <% } %>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <a href="/projetos" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>
+                            Voltar
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Registrar Gasto -->
+<div class="modal fade" id="modalRegistrarGasto" tabindex="-1" aria-labelledby="modalRegistrarGastoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalRegistrarGastoLabel">Registrar Gasto</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form action="/projetos/<%= projeto.id %>/gasto" method="POST" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="categoria" class="form-label">Categoria *</label>
+                        <select class="form-select" id="categoria" name="categoria" required>
+                            <option value="" selected disabled>-- Selecione --</option>
+                            <option value="material">Material de Construção</option>
+                            <option value="ferramenta">Ferramentas</option>
+                            <option value="transporte">Transporte</option>
+                            <option value="alimentacao">Alimentação</option>
+                            <option value="documentacao">Documentação/Licenças</option>
+                            <option value="outros">Outros</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">Descrição *</label>
+                        <input type="text" class="form-control" id="descricao" name="descricao" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="valor" class="form-label">Valor (R$) *</label>
+                        <input type="number" class="form-control" id="valor" name="valor" step="0.01" min="0.01" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="data" class="form-label">Data *</label>
+                        <input type="date" class="form-control" id="data" name="data" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="comprovante" class="form-label">Comprovante (opcional)</label>
+                        <input type="file" class="form-control" id="comprovante" name="comprovante">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Registrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Registrar Trabalho -->
+<div class="modal fade" id="modalRegistrarTrabalho" tabindex="-1" aria-labelledby="modalRegistrarTrabalhoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalRegistrarTrabalhoLabel">Registrar Trabalho</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form action="/projetos/<%= projeto.id %>/trabalho" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="funcionario_id" class="form-label">Funcionário *</label>
+                        <select class="form-select" id="funcionario_id" name="funcionario_id" required>
+                            <option value="" selected disabled>-- Selecione --</option>
+                            <% if (funcionarios && funcionarios.length > 0) { %>
+                                <% funcionarios.forEach(function(funcionario) { %>
+                                    <option value="<%= funcionario.id %>"><%= funcionario.nome %> - <%= funcionario.funcao %></option>
+                                <% }); %>
+                            <% } %>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="data" class="form-label">Data *</label>
+                        <input type="date" class="form-control" id="data" name="data" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="tipo_trabalho" class="form-label">Tipo de Trabalho *</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="empreitada" id="tipoDiaria" value="0" checked>
+                            <label class="form-check-label" for="tipoDiaria">
+                                Diária
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="empreitada" id="tipoEmpreitada" value="1">
+                            <label class="form-check-label" for="tipoEmpreitada">
+                                Empreitada
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="camposDiaria">
+                        <div class="mb-3">
+                            <label for="dias_trabalhados" class="form-label">Dias Trabalhados *</label>
+                            <input type="number" class="form-control" id="dias_trabalhados" name="dias_trabalhados" min="0.5" step="0.5" value="1">
+                        </div>
+                        <div class="mb-3">
+                            <label for="horas_extras" class="form-label">Horas Extras</label>
+                            <input type="number" class="form-control" id="horas_extras" name="horas_extras" min="0" step="0.5" value="0">
+                        </div>
+                    </div>
+                    
+                    <div id="camposEmpreitada" style="display:none">
+                        <div class="mb-3">
+                            <label for="valor_empreitada" class="form-label">Valor da Empreitada (R$) *</label>
+                            <input type="number" class="form-control" id="valor_empreitada" name="valor_empreitada" step="0.01" min="0">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Registrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Finalizar Projeto -->
+<div class="modal fade" id="modalFinalizarProjeto" tabindex="-1" aria-labelledby="modalFinalizarProjetoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalFinalizarProjetoLabel">Finalizar Projeto</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form action="/projetos/<%= projeto.id %>/finalizar" method="POST">
+                <div class="modal-body">
+                    <p>Você está finalizando o projeto <strong>"<%= projeto.nome %>"</strong>.</p>
+                    <div class="mb-3">
+                        <label for="data_fim_real" class="form-label">Data de Conclusão *</label>
+                        <input type="date" class="form-control" id="data_fim_real" name="data_fim_real" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Finalizar Projeto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Controle de exibição dos campos de diária e empreitada
+    const tipoDiaria = document.getElementById('tipoDiaria');
+    const tipoEmpreitada = document.getElementById('tipoEmpreitada');
+    const camposDiaria = document.getElementById('camposDiaria');
+    const camposEmpreitada = document.getElementById('camposEmpreitada');
+    
+    if (tipoDiaria && tipoEmpreitada) {
+        tipoDiaria.addEventListener('change', function() {
+            camposDiaria.style.display = 'block';
+            camposEmpreitada.style.display = 'none';
+        });
+        
+        tipoEmpreitada.addEventListener('change', function() {
+            camposDiaria.style.display = 'none';
+            camposEmpreitada.style.display = 'block';
+        });
+    }
+    
+    // Definir data atual como padrão nos campos de data
+    const dataHoje = new Date().toISOString().split('T')[0];
+    document.querySelectorAll('input[type="date"]').forEach(campo => {
+        if (!campo.value) {
+            campo.value = dataHoje;
+        }
+    });
+});
+</script>

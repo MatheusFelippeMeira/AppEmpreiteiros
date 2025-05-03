@@ -20,7 +20,7 @@ const upload = multer({ storage: storage });
 
 // Middleware para verificar se usuário está autenticado
 const isAuthenticated = (req, res, next) => {
-  if (req.session.userId) {
+  if (req.session.userId || req.session.user) {
     next();
   } else {
     res.redirect('/auth/login');
@@ -28,53 +28,54 @@ const isAuthenticated = (req, res, next) => {
 };
 
 // Listar todos os projetos
-router.get('/', isAuthenticated, (req, res) => {
-  Projeto.getAll((err, projetos) => {
-    if (err) {
-      console.error('Erro ao buscar projetos:', err);
-      return res.status(500).render('error', { 
-        title: 'Erro', 
-        message: 'Erro ao buscar projetos'
-      });
-    }
-    
+router.get('/', isAuthenticated, async (req, res) => {
+  try {
+    const projetos = await Projeto.getAll();
     res.render('projetos/index', {
       title: 'Projetos/Obras',
       projetos
     });
-  });
+  } catch (err) {
+    console.error('Erro ao buscar projetos:', err);
+    res.status(500).render('error', { 
+      title: 'Erro', 
+      message: 'Erro ao buscar projetos'
+    });
+  }
 });
 
 // Formulário para novo projeto
-router.get('/novo', isAuthenticated, (req, res) => {
-  // Buscar todos os clientes para o formulário
-  Cliente.getAll((err, clientes) => {
-    if (err) {
-      console.error('Erro ao buscar clientes:', err);
-      clientes = [];
-    }
+router.get('/novo', isAuthenticated, async (req, res) => {
+  try {
+    // Buscar todos os clientes para o formulário
+    const clientes = await Cliente.getAll();
     
     res.render('projetos/form', {
       title: 'Novo Projeto/Obra',
       projeto: {},
       clientes
     });
-  });
+  } catch (err) {
+    console.error('Erro ao buscar clientes:', err);
+    res.render('projetos/form', {
+      title: 'Novo Projeto/Obra',
+      projeto: {},
+      clientes: [],
+      error: 'Erro ao carregar dados de clientes'
+    });
+  }
 });
 
 // Criar novo projeto
-router.post('/', isAuthenticated, (req, res) => {
+router.post('/', isAuthenticated, async (req, res) => {
   const { nome, cliente_id, localidade, tipo, data_inicio, data_fim_prevista, 
           valor_receber, deslocamento_incluido } = req.body;
   
   // Validação simples
   if (!nome || !localidade || !tipo || !data_inicio) {
-    // Buscar todos os clientes novamente para o formulário
-    Cliente.getAll((err, clientes) => {
-      if (err) {
-        console.error('Erro ao buscar clientes:', err);
-        clientes = [];
-      }
+    try {
+      // Buscar todos os clientes novamente para o formulário
+      const clientes = await Cliente.getAll();
       
       return res.status(400).render('projetos/form', {
         title: 'Novo Projeto/Obra',
@@ -82,113 +83,99 @@ router.post('/', isAuthenticated, (req, res) => {
         clientes,
         error: 'Nome, localidade, tipo e data de início são obrigatórios'
       });
-    });
-    return;
+    } catch (err) {
+      console.error('Erro ao buscar clientes:', err);
+      return res.status(400).render('projetos/form', {
+        title: 'Novo Projeto/Obra',
+        projeto: req.body,
+        clientes: [],
+        error: 'Nome, localidade, tipo e data de início são obrigatórios'
+      });
+    }
   }
   
-  Projeto.create(req.body, (err, id) => {
-    if (err) {
-      console.error('Erro ao criar projeto:', err);
-      
-      // Buscar todos os clientes novamente para o formulário
-      Cliente.getAll((err, clientes) => {
-        if (err) {
-          console.error('Erro ao buscar clientes:', err);
-          clientes = [];
-        }
-        
-        return res.status(500).render('projetos/form', {
-          title: 'Novo Projeto/Obra',
-          projeto: req.body,
-          clientes,
-          error: 'Erro ao criar projeto'
-        });
-      });
-      return;
-    }
-    
+  try {
+    const id = await Projeto.create(req.body);
     res.redirect(`/projetos/${id}`);
-  });
+  } catch (err) {
+    console.error('Erro ao criar projeto:', err);
+    
+    try {
+      // Buscar todos os clientes novamente para o formulário
+      const clientes = await Cliente.getAll();
+      
+      return res.status(500).render('projetos/form', {
+        title: 'Novo Projeto/Obra',
+        projeto: req.body,
+        clientes,
+        error: 'Erro ao criar projeto'
+      });
+    } catch (clienteErr) {
+      return res.status(500).render('projetos/form', {
+        title: 'Novo Projeto/Obra',
+        projeto: req.body,
+        clientes: [],
+        error: 'Erro ao criar projeto'
+      });
+    }
+  }
 });
 
 // Visualizar um projeto específico
-router.get('/:id', isAuthenticated, (req, res) => {
+router.get('/:id', isAuthenticated, async (req, res) => {
   const id = req.params.id;
   
-  Projeto.getById(id, (err, projeto) => {
-    if (err || !projeto) {
-      console.error('Erro ao buscar projeto:', err);
+  try {
+    const projeto = await Projeto.getById(id);
+    
+    if (!projeto) {
       return res.status(404).render('error', { 
         title: 'Erro', 
         message: 'Projeto não encontrado'
       });
     }
     
-    // Buscar gastos do projeto
-    Projeto.getGastos(id, (err, gastos) => {
-      if (err) {
-        console.error('Erro ao buscar gastos do projeto:', err);
-        gastos = [];
+    // Buscar gastos e trabalhos
+    const gastos = await Projeto.getGastos(id);
+    const trabalhos = await Projeto.getTrabalhos(id);
+    const lucratividade = await Projeto.calcularLucratividade(id);
+    const funcionarios = await Funcionario.getAll();
+    
+    // Agrupar gastos por categoria
+    const gastosPorCategoria = {};
+    gastos.forEach(gasto => {
+      if (!gastosPorCategoria[gasto.categoria]) {
+        gastosPorCategoria[gasto.categoria] = 0;
       }
-      
-      // Buscar trabalhos do projeto
-      Projeto.getTrabalhos(id, (err, trabalhos) => {
-        if (err) {
-          console.error('Erro ao buscar trabalhos do projeto:', err);
-          trabalhos = [];
-        }
-        
-        // Calcular lucratividade
-        Projeto.calcularLucratividade(id, (err, lucratividade) => {
-          if (err) {
-            console.error('Erro ao calcular lucratividade:', err);
-            lucratividade = {
-              nome: projeto.nome,
-              valor_receber: projeto.valor_receber,
-              total_gastos: 0,
-              custo_mao_obra: 0
-            };
-          }
-          
-          // Buscar todos os funcionários para o formulário de registro de trabalho
-          Funcionario.getAll((err, funcionarios) => {
-            if (err) {
-              console.error('Erro ao buscar funcionários:', err);
-              funcionarios = [];
-            }
-            
-            // Agrupar gastos por categoria
-            const gastosPorCategoria = {};
-            gastos.forEach(gasto => {
-              if (!gastosPorCategoria[gasto.categoria]) {
-                gastosPorCategoria[gasto.categoria] = 0;
-              }
-              gastosPorCategoria[gasto.categoria] += gasto.valor;
-            });
-            
-            res.render('projetos/detalhes', {
-              title: `Projeto - ${projeto.nome}`,
-              projeto,
-              gastos,
-              trabalhos,
-              funcionarios,
-              lucratividade,
-              gastosPorCategoria
-            });
-          });
-        });
-      });
+      gastosPorCategoria[gasto.categoria] += gasto.valor;
     });
-  });
+    
+    res.render('projetos/detalhes', {
+      title: `Projeto - ${projeto.nome}`,
+      projeto,
+      gastos,
+      trabalhos,
+      funcionarios,
+      lucratividade,
+      gastosPorCategoria
+    });
+  } catch (err) {
+    console.error('Erro ao buscar detalhes do projeto:', err);
+    return res.status(500).render('error', { 
+      title: 'Erro', 
+      message: 'Erro ao buscar detalhes do projeto'
+    });
+  }
 });
 
 // Formulário para editar projeto
-router.get('/:id/editar', isAuthenticated, (req, res) => {
+router.get('/:id/editar', isAuthenticated, async (req, res) => {
   const id = req.params.id;
   
-  Projeto.getById(id, (err, projeto) => {
-    if (err || !projeto) {
-      console.error('Erro ao buscar projeto:', err);
+  try {
+    const projeto = await Projeto.getById(id);
+    
+    if (!projeto) {
       return res.status(404).render('error', { 
         title: 'Erro', 
         message: 'Projeto não encontrado'
@@ -196,35 +183,33 @@ router.get('/:id/editar', isAuthenticated, (req, res) => {
     }
     
     // Buscar todos os clientes para o formulário
-    Cliente.getAll((err, clientes) => {
-      if (err) {
-        console.error('Erro ao buscar clientes:', err);
-        clientes = [];
-      }
-      
-      res.render('projetos/form', {
-        title: `Editar - ${projeto.nome}`,
-        projeto,
-        clientes
-      });
+    const clientes = await Cliente.getAll();
+    
+    res.render('projetos/form', {
+      title: `Editar - ${projeto.nome}`,
+      projeto,
+      clientes
     });
-  });
+  } catch (err) {
+    console.error('Erro ao buscar projeto para edição:', err);
+    return res.status(500).render('error', { 
+      title: 'Erro', 
+      message: 'Erro ao buscar projeto para edição'
+    });
+  }
 });
 
 // Atualizar projeto
-router.post('/:id', isAuthenticated, (req, res) => {
+router.post('/:id', isAuthenticated, async (req, res) => {
   const id = req.params.id;
   const { nome, cliente_id, localidade, tipo, data_inicio, data_fim_prevista, 
           data_fim_real, valor_receber, deslocamento_incluido, status } = req.body;
   
   // Validação simples
   if (!nome || !localidade || !tipo || !data_inicio) {
-    // Buscar todos os clientes novamente para o formulário
-    Cliente.getAll((err, clientes) => {
-      if (err) {
-        console.error('Erro ao buscar clientes:', err);
-        clientes = [];
-      }
+    try {
+      // Buscar todos os clientes novamente para o formulário
+      const clientes = await Cliente.getAll();
       
       return res.status(400).render('projetos/form', {
         title: 'Editar Projeto/Obra',
@@ -232,54 +217,62 @@ router.post('/:id', isAuthenticated, (req, res) => {
         clientes,
         error: 'Nome, localidade, tipo e data de início são obrigatórios'
       });
-    });
-    return;
+    } catch (err) {
+      console.error('Erro ao buscar clientes:', err);
+      return res.status(400).render('projetos/form', {
+        title: 'Editar Projeto/Obra',
+        projeto: { id, ...req.body },
+        clientes: [],
+        error: 'Nome, localidade, tipo e data de início são obrigatórios'
+      });
+    }
   }
   
-  Projeto.update(id, req.body, (err) => {
-    if (err) {
-      console.error('Erro ao atualizar projeto:', err);
-      
-      // Buscar todos os clientes novamente para o formulário
-      Cliente.getAll((err, clientes) => {
-        if (err) {
-          console.error('Erro ao buscar clientes:', err);
-          clientes = [];
-        }
-        
-        return res.status(500).render('projetos/form', {
-          title: 'Editar Projeto/Obra',
-          projeto: { id, ...req.body },
-          clientes,
-          error: 'Erro ao atualizar projeto'
-        });
-      });
-      return;
-    }
-    
+  try {
+    await Projeto.update(id, req.body);
     res.redirect(`/projetos/${id}`);
-  });
+  } catch (err) {
+    console.error('Erro ao atualizar projeto:', err);
+    
+    try {
+      // Buscar todos os clientes novamente para o formulário
+      const clientes = await Cliente.getAll();
+      
+      return res.status(500).render('projetos/form', {
+        title: 'Editar Projeto/Obra',
+        projeto: { id, ...req.body },
+        clientes,
+        error: 'Erro ao atualizar projeto'
+      });
+    } catch (clienteErr) {
+      return res.status(500).render('projetos/form', {
+        title: 'Editar Projeto/Obra',
+        projeto: { id, ...req.body },
+        clientes: [],
+        error: 'Erro ao atualizar projeto'
+      });
+    }
+  }
 });
 
 // Excluir projeto
-router.post('/:id/excluir', isAuthenticated, (req, res) => {
+router.post('/:id/excluir', isAuthenticated, async (req, res) => {
   const id = req.params.id;
   
-  Projeto.delete(id, (err) => {
-    if (err) {
-      console.error('Erro ao excluir projeto:', err);
-      return res.status(500).render('error', { 
-        title: 'Erro', 
-        message: 'Erro ao excluir projeto'
-      });
-    }
-    
+  try {
+    await Projeto.delete(id);
     res.redirect('/projetos');
-  });
+  } catch (err) {
+    console.error('Erro ao excluir projeto:', err);
+    return res.status(500).render('error', { 
+      title: 'Erro', 
+      message: 'Erro ao excluir projeto'
+    });
+  }
 });
 
 // Registrar gasto
-router.post('/:id/gasto', isAuthenticated, upload.single('comprovante'), (req, res) => {
+router.post('/:id/gasto', isAuthenticated, upload.single('comprovante'), async (req, res) => {
   const projeto_id = req.params.id;
   const { categoria, descricao, valor, data } = req.body;
   
@@ -290,29 +283,29 @@ router.post('/:id/gasto', isAuthenticated, upload.single('comprovante'), (req, r
     });
   }
   
-  const gasto = {
-    projeto_id,
-    categoria,
-    descricao,
-    valor,
-    data,
-    comprovante_url: req.file ? `/uploads/comprovantes/${req.file.filename}` : null
-  };
-  
-  Projeto.registrarGasto(gasto, (err, id) => {
-    if (err) {
-      console.error('Erro ao registrar gasto:', err);
-      return res.status(500).json({ 
-        error: 'Erro ao registrar gasto'
-      });
-    }
+  try {
+    const gasto = {
+      projeto_id,
+      categoria,
+      descricao,
+      valor,
+      data,
+      comprovante_url: req.file ? `/uploads/comprovantes/${req.file.filename}` : null
+    };
     
+    await Projeto.registrarGasto(gasto);
     res.redirect(`/projetos/${projeto_id}`);
-  });
+  } catch (err) {
+    console.error('Erro ao registrar gasto:', err);
+    return res.status(500).render('error', { 
+      title: 'Erro', 
+      message: 'Erro ao registrar gasto'
+    });
+  }
 });
 
 // Finalizar projeto
-router.post('/:id/finalizar', isAuthenticated, (req, res) => {
+router.post('/:id/finalizar', isAuthenticated, async (req, res) => {
   const id = req.params.id;
   const { data_fim_real } = req.body;
   
@@ -323,16 +316,16 @@ router.post('/:id/finalizar', isAuthenticated, (req, res) => {
     });
   }
   
-  Projeto.update(id, { data_fim_real, status: 'concluido' }, (err) => {
-    if (err) {
-      console.error('Erro ao finalizar projeto:', err);
-      return res.status(500).json({ 
-        error: 'Erro ao finalizar projeto'
-      });
-    }
-    
+  try {
+    await Projeto.update(id, { data_fim_real, status: 'concluido' });
     res.redirect(`/projetos/${id}`);
-  });
+  } catch (err) {
+    console.error('Erro ao finalizar projeto:', err);
+    return res.status(500).render('error', { 
+      title: 'Erro', 
+      message: 'Erro ao finalizar projeto'
+    });
+  }
 });
 
 module.exports = router;

@@ -1,0 +1,148 @@
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="fas fa-building me-2"></i>
+                    <%= projeto.id ? 'Editar Projeto' : 'Novo Projeto' %>
+                </h4>
+            </div>
+            <div class="card-body">
+                <% if (typeof error !== 'undefined' && error) { %>
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <%= error %>
+                    </div>
+                <% } %>
+
+                <form id="projetoForm" action="<%= projeto.id ? `/projetos/${projeto.id}` : '/projetos' %>" method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="nome" class="form-label">Nome do Projeto/Obra *</label>
+                            <input type="text" class="form-control" id="nome" name="nome" 
+                                value="<%= projeto.nome || '' %>" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="cliente_id" class="form-label">Cliente</label>
+                            <select class="form-select" id="cliente_id" name="cliente_id">
+                                <option value="">-- Selecione um Cliente --</option>
+                                <% if (clientes && clientes.length > 0) { %>
+                                    <% clientes.forEach(function(cliente) { %>
+                                        <option value="<%= cliente.id %>" 
+                                            <%= projeto.cliente_id == cliente.id ? 'selected' : '' %>>
+                                            <%= cliente.nome %>
+                                        </option>
+                                    <% }); %>
+                                <% } %>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="localidade" class="form-label">Localidade *</label>
+                            <input type="text" class="form-control" id="localidade" name="localidade" 
+                                value="<%= projeto.localidade || '' %>" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="tipo" class="form-label">Tipo de Obra *</label>
+                            <select class="form-select" id="tipo" name="tipo" required>
+                                <option value="" selected disabled>-- Selecione --</option>
+                                <option value="residencial" <%= projeto.tipo === 'residencial' ? 'selected' : '' %>>
+                                    Residencial
+                                </option>
+                                <option value="comercial" <%= projeto.tipo === 'comercial' ? 'selected' : '' %>>
+                                    Comercial
+                                </option>
+                                <option value="industrial" <%= projeto.tipo === 'industrial' ? 'selected' : '' %>>
+                                    Industrial
+                                </option>
+                                <option value="reforma" <%= projeto.tipo === 'reforma' ? 'selected' : '' %>>
+                                    Reforma
+                                </option>
+                                <option value="outros" <%= projeto.tipo === 'outros' ? 'selected' : '' %>>
+                                    Outros
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="data_inicio" class="form-label">Data de Início *</label>
+                            <input type="date" class="form-control" id="data_inicio" name="data_inicio" 
+                                value="<%= projeto.data_inicio || '' %>" required>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="data_fim_prevista" class="form-label">Data de Conclusão Prevista</label>
+                            <input type="date" class="form-control" id="data_fim_prevista" name="data_fim_prevista" 
+                                value="<%= projeto.data_fim_prevista || '' %>">
+                        </div>
+                        
+                        <% if (projeto.id) { %>
+                            <div class="col-md-4 mb-3">
+                                <label for="data_fim_real" class="form-label">Data de Conclusão Real</label>
+                                <input type="date" class="form-control" id="data_fim_real" name="data_fim_real" 
+                                    value="<%= projeto.data_fim_real || '' %>">
+                            </div>
+                        <% } %>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="valor_receber" class="form-label">Valor a Receber (R$)</label>
+                            <input type="number" class="form-control" id="valor_receber" name="valor_receber" 
+                                step="0.01" min="0" value="<%= projeto.valor_receber || '' %>">
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="deslocamento_incluido" 
+                                    name="deslocamento_incluido" value="1" 
+                                    <%= projeto.deslocamento_incluido ? 'checked' : '' %>>
+                                <label class="form-check-label" for="deslocamento_incluido">
+                                    Deslocamento incluído no valor
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <% if (projeto.id) { %>
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label for="status" class="form-label">Status do Projeto</label>
+                                <select class="form-select" id="status" name="status">
+                                    <option value="em_andamento" <%= projeto.status === 'em_andamento' ? 'selected' : '' %>>
+                                        Em andamento
+                                    </option>
+                                    <option value="concluido" <%= projeto.status === 'concluido' ? 'selected' : '' %>>
+                                        Concluído
+                                    </option>
+                                    <option value="cancelado" <%= projeto.status === 'cancelado' ? 'selected' : '' %>>
+                                        Cancelado
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                    <% } %>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-12 d-flex justify-content-between">
+                            <a href="/projetos" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>
+                                Voltar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>
+                                <%= projeto.id ? 'Atualizar Projeto' : 'Salvar Projeto' %>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
