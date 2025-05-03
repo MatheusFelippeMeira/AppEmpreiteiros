@@ -2,18 +2,83 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const db = require('../config/database');
+const authUtils = require('../utils/authUtils');
 
 // Rota para página de login
 router.get('/login', (req, res) => {
   // Se já estiver autenticado, redireciona para dashboard
   if (req.session.user) {
-    return res.redirect('/');
+    return res.redirect('/dashboard');
   }
+  
+  // Preparar um script específico para a página de login
+  const loginScript = `
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const loginForm = document.getElementById('loginForm');
+      
+      if (loginForm) {
+        loginForm.addEventListener('submit', function(event) {
+          event.preventDefault();
+          
+          // Desabilita o botão para evitar cliques múltiplos
+          const submitButton = loginForm.querySelector('button[type="submit"]');
+          submitButton.disabled = true;
+          submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Entrando...';
+          
+          // Obter os dados do formulário
+          const formData = new FormData(loginForm);
+          const formDataObj = {};
+          formData.forEach((value, key) => formDataObj[key] = value);
+          
+          // Enviar a requisição via fetch API
+          fetch('/auth/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify(formDataObj),
+            credentials: 'same-origin'
+          })
+          .then(response => {
+            return response.json();
+          })
+          .then(data => {
+            if (data.success) {
+              console.log('Login bem-sucedido, redirecionando...');
+              window.location.href = data.redirect || '/dashboard';
+            } else {
+              submitButton.disabled = false;
+              submitButton.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Entrar';
+              
+              // Exibir mensagem de erro
+              const errorMessage = document.getElementById('errorMessage');
+              if (errorMessage) {
+                errorMessage.textContent = data.message || 'Erro no login';
+                errorMessage.parentElement.style.display = 'block';
+              } else {
+                alert(data.message || 'Erro no login');
+              }
+            }
+          })
+          .catch(error => {
+            console.error('Erro ao fazer login:', error);
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Entrar';
+            alert('Erro ao processar login. Por favor, tente novamente.');
+          });
+        });
+      }
+    });
+  </script>
+  `;
   
   res.render('auth/login', { 
     title: 'Login',
     hideNavbar: true,
-    error: req.query.error
+    error: req.query.error,
+    pageScripts: loginScript
   });
 });
 
@@ -26,10 +91,9 @@ router.post('/login', async (req, res) => {
     const user = await db.promiseGet('SELECT * FROM users WHERE email = ?', [email]);
     
     if (!user) {
-      return res.render('auth/login', { 
-        title: 'Login',
-        hideNavbar: true,
-        error: 'Email ou senha incorretos'
+      return res.status(401).json({
+        success: false,
+        message: 'Email ou senha incorretos'
       });
     }
     
@@ -37,60 +101,38 @@ router.post('/login', async (req, res) => {
     const senhaValida = await bcrypt.compare(senha, user.senha);
     
     if (!senhaValida) {
-      return res.render('auth/login', { 
-        title: 'Login',
-        hideNavbar: true,
-        error: 'Email ou senha incorretos'
+      return res.status(401).json({
+        success: false,
+        message: 'Email ou senha incorretos'
       });
     }
     
-    // Guardar usuário na sessão (exceto a senha)
-    // Corrigindo o campo perfil para role para corresponder ao esquema do Supabase
-    req.session.user = {
+    // Criar objeto de usuário para sessão (sem a senha)
+    const userSession = {
       id: user.id,
       nome: user.nome,
       email: user.email,
-      perfil: user.role // Usando role do banco e mapeando para perfil na sessão
+      perfil: user.role || 'usuario' // Usando role do banco e mapeando para perfil na sessão
     };
+    
+    // Definir token JWT no cookie e na sessão
+    authUtils.setAuthCookie(res, req, userSession);
     
     // Adicionar log para debug
     console.log('Login bem-sucedido para:', email);
-    console.log('Sessão do usuário:', req.session.user);
     
-    // Salvar a sessão explicitamente antes de redirecionar
-    req.session.save((err) => {
-      if (err) {
-        console.error('Erro ao salvar sessão:', err);
-        return res.status(500).render('error', { 
-          title: 'Erro', 
-          message: 'Erro ao salvar sessão', 
-          error: err 
-        });
-      }
-      
-      // Verificar se o cliente aceita HTML ou prefere JSON
-      const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
-      
-      if (acceptsHtml) {
-        // Redirecionar normalmente para navegadores
-        console.log('Redirecionando usuário para dashboard');
-        return res.redirect('/dashboard');
-      } else {
-        // Para requisições de API, retornar JSON com URL de redirecionamento
-        console.log('Retornando JSON com URL de redirecionamento');
-        return res.json({ 
-          success: true, 
-          redirect: '/dashboard',
-          message: 'Login bem-sucedido'
-        });
-      }
+    // Retornar resposta JSON com sucesso
+    res.json({
+      success: true,
+      message: 'Login bem-sucedido',
+      redirect: '/dashboard'
     });
+    
   } catch (err) {
     console.error('Erro no login:', err);
-    res.status(500).render('error', { 
-      title: 'Erro', 
-      message: 'Erro no processo de login', 
-      error: err 
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor'
     });
   }
 });
@@ -99,12 +141,85 @@ router.post('/login', async (req, res) => {
 router.get('/registro', (req, res) => {
   // Se já estiver autenticado, redireciona para dashboard
   if (req.session.user) {
-    return res.redirect('/');
+    return res.redirect('/dashboard');
   }
+  
+  // Preparar um script específico para a página de registro
+  const registroScript = `
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const registroForm = document.getElementById('registroForm');
+      
+      if (registroForm) {
+        registroForm.addEventListener('submit', function(event) {
+          event.preventDefault();
+          
+          // Validação básica do lado do cliente
+          const senha = document.getElementById('senha').value;
+          const confirmarSenha = document.getElementById('confirmar_senha').value;
+          
+          if (senha !== confirmarSenha) {
+            alert('As senhas não coincidem!');
+            return;
+          }
+          
+          // Desabilita o botão para evitar cliques múltiplos
+          const submitButton = registroForm.querySelector('button[type="submit"]');
+          submitButton.disabled = true;
+          submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Registrando...';
+          
+          // Obter os dados do formulário
+          const formData = new FormData(registroForm);
+          const formDataObj = {};
+          formData.forEach((value, key) => formDataObj[key] = value);
+          
+          // Enviar a requisição via fetch API
+          fetch('/auth/registro', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify(formDataObj),
+            credentials: 'same-origin'
+          })
+          .then(response => {
+            return response.json();
+          })
+          .then(data => {
+            if (data.success) {
+              console.log('Registro bem-sucedido, redirecionando...');
+              window.location.href = data.redirect || '/dashboard';
+            } else {
+              submitButton.disabled = false;
+              submitButton.innerHTML = '<i class="fas fa-user-plus me-2"></i>Registrar';
+              
+              // Exibir mensagem de erro
+              const errorMessage = document.getElementById('errorMessage');
+              if (errorMessage) {
+                errorMessage.textContent = data.message || 'Erro no registro';
+                errorMessage.parentElement.style.display = 'block';
+              } else {
+                alert(data.message || 'Erro no registro');
+              }
+            }
+          })
+          .catch(error => {
+            console.error('Erro ao fazer registro:', error);
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="fas fa-user-plus me-2"></i>Registrar';
+            alert('Erro ao processar registro. Por favor, tente novamente.');
+          });
+        });
+      }
+    });
+  </script>
+  `;
   
   res.render('auth/registro', { 
     title: 'Registro',
-    hideNavbar: true
+    hideNavbar: true,
+    pageScripts: registroScript
   });
 });
 
@@ -115,10 +230,9 @@ router.post('/registro', async (req, res) => {
     
     // Verificar se as senhas coincidem
     if (senha !== confirmar_senha) {
-      return res.render('auth/registro', { 
-        title: 'Registro',
-        hideNavbar: true,
-        error: 'As senhas não coincidem'
+      return res.status(400).json({ 
+        success: false,
+        message: 'As senhas não coincidem'
       });
     }
     
@@ -126,10 +240,9 @@ router.post('/registro', async (req, res) => {
     const usuarioExiste = await db.promiseGet('SELECT id FROM users WHERE email = ?', [email]);
     
     if (usuarioExiste) {
-      return res.render('auth/registro', { 
-        title: 'Registro',
-        hideNavbar: true,
-        error: 'Este e-mail já está sendo utilizado'
+      return res.status(409).json({ 
+        success: false,
+        message: 'Este e-mail já está sendo utilizado'
       });
     }
     
@@ -142,65 +255,42 @@ router.post('/registro', async (req, res) => {
       [nome, email, senhaCriptografada, 'usuario']
     );
     
-    // Criar sessão para o novo usuário
-    req.session.user = {
+    // Criar objeto de usuário para sessão
+    const userSession = {
       id: resultado.lastID,
       nome,
       email,
-      perfil: 'usuario' // Mantendo perfil na sessão para compatibilidade
+      perfil: 'usuario'
     };
+    
+    // Definir token JWT no cookie e na sessão
+    authUtils.setAuthCookie(res, req, userSession);
     
     // Adicionar log para debug
     console.log('Registro bem-sucedido para:', email);
-    console.log('Sessão do usuário:', req.session.user);
     
-    // Salvar a sessão explicitamente antes de redirecionar
-    req.session.save((err) => {
-      if (err) {
-        console.error('Erro ao salvar sessão:', err);
-        return res.status(500).render('error', { 
-          title: 'Erro', 
-          message: 'Erro ao salvar sessão', 
-          error: err 
-        });
-      }
-      
-      // Verificar se o cliente aceita HTML ou prefere JSON
-      const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
-      
-      if (acceptsHtml) {
-        // Redirecionar normalmente para navegadores
-        console.log('Redirecionando novo usuário para dashboard');
-        return res.redirect('/dashboard');
-      } else {
-        // Para requisições de API, retornar JSON com URL de redirecionamento
-        return res.json({ 
-          success: true, 
-          redirect: '/dashboard',
-          message: 'Registro bem-sucedido'
-        });
-      }
+    // Retornar resposta JSON com sucesso
+    res.json({
+      success: true,
+      message: 'Registro bem-sucedido',
+      redirect: '/dashboard'
     });
+    
   } catch (err) {
     console.error('Erro no registro:', err);
-    res.status(500).render('error', { 
-      title: 'Erro', 
-      message: 'Erro no processo de registro', 
-      error: err 
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor'
     });
   }
 });
 
 // Rota de logout
 router.get('/logout', (req, res) => {
-  // Destruir sessão
-  req.session.destroy((err) => {
-    if (err) {
-      console.error('Erro ao fazer logout:', err);
-    }
-    
-    res.redirect('/auth/login');
-  });
+  // Limpar cookie de autenticação e sessão
+  authUtils.clearAuthCookie(res, req);
+  
+  res.redirect('/auth/login');
 });
 
 module.exports = router;

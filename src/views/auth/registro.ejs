@@ -18,6 +18,10 @@
                     </div>
                 <% } %>
 
+                <div id="errorAlert" class="alert alert-danger" style="display: none;">
+                    <span id="errorMessage"></span>
+                </div>
+
                 <form id="registroForm" action="/auth/registro" method="POST">
                     <!-- Campo oculto para o token CSRF -->
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -77,6 +81,8 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const registroForm = document.getElementById('registroForm');
+    const errorAlert = document.getElementById('errorAlert');
+    const errorMessage = document.getElementById('errorMessage');
     
     if (registroForm) {
         registroForm.addEventListener('submit', function(event) {
@@ -87,9 +93,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const confirmarSenha = document.getElementById('confirmar_senha').value;
             
             if (senha !== confirmarSenha) {
-                alert('As senhas não coincidem!');
+                errorMessage.textContent = 'As senhas não coincidem!';
+                errorAlert.style.display = 'block';
                 return;
             }
+            
+            // Desabilitar botão de envio para evitar duplo envio
+            const submitButton = registroForm.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Registrando...';
             
             // Obter os dados do formulário
             const formData = new FormData(registroForm);
@@ -99,12 +111,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 method: 'POST',
                 body: formData,
                 headers: {
+                    // Não definir Content-Type, deixe o navegador configurar com boundary para FormData
                     'Accept': 'application/json, text/html'
                 },
                 credentials: 'same-origin'
             })
             .then(response => {
-                // Verificar se a resposta é um redirecionamento
+                // Verificar primeiro se a resposta é um redirecionamento
                 if (response.redirected) {
                     window.location.href = response.url;
                     return;
@@ -116,9 +129,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     return response.json().then(data => {
                         if (data.success && data.redirect) {
                             window.location.href = data.redirect;
-                        } else if (data.error) {
+                        } else if (data.message) {
+                            // Restaurar botão
+                            submitButton.disabled = false;
+                            submitButton.innerHTML = '<i class="fas fa-user-plus me-2"></i>Registrar';
+                            
                             // Exibir mensagem de erro
-                            alert('Erro: ' + data.error);
+                            errorMessage.textContent = data.message;
+                            errorAlert.style.display = 'block';
                         } else {
                             // Recarregar a página para exibir mensagens de erro do servidor
                             window.location.reload();
@@ -135,8 +153,13 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 console.error('Erro ao fazer registro:', error);
-                // Em caso de falha na requisição, submeter o formulário normalmente
-                registroForm.submit();
+                // Restaurar botão
+                submitButton.disabled = false;
+                submitButton.innerHTML = '<i class="fas fa-user-plus me-2"></i>Registrar';
+                
+                // Exibir erro genérico
+                errorMessage.textContent = 'Erro ao fazer registro. Tente novamente.';
+                errorAlert.style.display = 'block';
             });
         });
     }

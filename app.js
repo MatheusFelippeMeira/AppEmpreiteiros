@@ -7,7 +7,9 @@ const helmet = require('helmet');
 const compression = require('compression');
 const ejsLayouts = require('express-ejs-layouts');
 const methodOverride = require('method-override'); // Importar method-override
+const cookieParser = require('cookie-parser'); // Adicionando cookie-parser
 const { supabase, testConnection } = require('./src/config/supabase'); // Importar o cliente Supabase
+const { authMiddleware } = require('./src/utils/authUtils'); // Importar middleware de autenticação JWT
 
 // Importação de rotas
 const authRoutes = require('./src/routes/auth');
@@ -33,6 +35,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'src/public')));
 app.use(methodOverride('_method')); // Usar method-override
+app.use(cookieParser()); // Adicionando middleware de cookie parser
 
 // Segurança e otimização
 if (isDev) {
@@ -227,11 +230,13 @@ app.get('/health', (req, res) => {
 
 // Rotas
 app.use('/auth', authRoutes);
-app.use('/dashboard', dashboardRoutes);
-app.use('/projetos', projetosRoutes);
-app.use('/funcionarios', funcionariosRoutes);
-app.use('/orcamentos', orcamentosRoutes);
-app.use('/relatorios', relatoriosRoutes);
+
+// Proteger todas as rotas a seguir com o middleware de autenticação JWT
+app.use('/dashboard', authMiddleware, dashboardRoutes);
+app.use('/projetos', authMiddleware, projetosRoutes);
+app.use('/funcionarios', authMiddleware, funcionariosRoutes);
+app.use('/orcamentos', authMiddleware, orcamentosRoutes);
+app.use('/relatorios', authMiddleware, relatoriosRoutes);
 
 // Rota principal
 app.get('/', (req, res) => {
