@@ -1,16 +1,20 @@
 const sqlite3 = require('sqlite3').verbose();
-const { Pool } = require('pg');
 const path = require('path');
 const fs = require('fs');
+const { supabase } = require('./supabase');
 
 let db;
 
-// Verificar se estamos em ambiente de produção de forma mais robusta
-const isProduction = process.env.NODE_ENV === 'production' || !!process.env.DATABASE_URL;
-// Verificar se devemos forçar SQLite mesmo em produção (útil para debugging)
+// Verificar se estamos em ambiente de produção
+const isProduction = process.env.NODE_ENV === 'production';
+// Verificar se devemos forçar SQLite mesmo em produção
 const forceSqlite = process.env.FORCE_SQLITE === 'true';
+// Verificar se devemos usar a API do Supabase em vez de conexão direta
+const useSupabaseApi = process.env.USE_SUPABASE_API === 'true' || true; // Por padrão, usar API
 
 console.log(`Ambiente: ${isProduction ? 'produção' : 'desenvolvimento'}`);
+console.log(`Modo de conexão: ${useSupabaseApi ? 'Supabase API' : 'Conexão direta ou SQLite'}`);
+
 if (forceSqlite) {
   console.log('⚠️ AVISO: SQLite está sendo forçado mesmo em produção (FORCE_SQLITE=true)');
 }
@@ -32,9 +36,12 @@ const setupSQLite = (dbPath) => {
       console.error('❌ Erro ao conectar ao banco de dados SQLite:', err);
     } else {
       console.log(`✅ Conectado ao banco de dados SQLite em: ${dbPath}`);
+      
+      // Criar tabelas essenciais se não existirem
+      setupSqliteTables(sqliteDb);
     }
   });
-
+  
   // Configurar para usar Promise em algumas operações
   return {
     promiseAll: (query, params) => {
@@ -80,111 +87,235 @@ const setupSQLite = (dbPath) => {
   };
 };
 
-// Se estamos em produção E não estamos forçando SQLite
-if (isProduction && !forceSqlite) {
-  try {
-    // Verificar disponibilidade da URL do banco de dados em produção
-    if (!process.env.DATABASE_URL) {
-      console.error('⚠️ ERRO CRÍTICO: Variável DATABASE_URL não definida, mas aplicação está em produção!');
-      throw new Error('DATABASE_URL não definida');
-    }
+// Função para configurar tabelas SQLite essenciais
+const setupSqliteTables = async (sqliteDb) => {
+  // Array com comandos SQL para criar tabelas essenciais
+  const tableCreationCommands = [
+    `CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      senha TEXT NOT NULL,
+      role TEXT DEFAULT 'user',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS session (
+      sid TEXT PRIMARY KEY,
+      sess TEXT NOT NULL,
+      expire TIMESTAMP NOT NULL
+    )`,
+    // Adicione outras tabelas necessárias aqui
+  ];
 
-    // Configuração para PostgreSQL em produção
-    const connectionString = process.env.DATABASE_URL;
-    console.log(`Usando DATABASE_URL: ${connectionString ? 'definido (não exibido por segurança)' : 'não definido'}`);
-    
-    // Tentar extrair host e porta da URL para diagnóstico
-    try {
-      const urlParts = new URL(connectionString);
-      console.log(`Tentando conectar a: ${urlParts.hostname}:${urlParts.port || 'default'}`);
-    } catch (e) {
-      console.error('⚠️ Não foi possível analisar a URL de conexão. Formato incorreto?');
-    }
-    
-    const pool = new Pool({
-      connectionString: connectionString,
-      ssl: {
-        rejectUnauthorized: false
-      },
-      // Adicionar configurações para melhorar a estabilidade da conexão
-      max: 20, // máximo de conexões no pool
-      idleTimeoutMillis: 30000, // tempo máximo que uma conexão pode ficar inativa (30 segundos)
-      connectionTimeoutMillis: 10000, // tempo limite para tentativas de conexão (10 segundos)
-    });
+  // Executar cada comando em sequência
+  for (const command of tableCreationCommands) {
+    await new Promise((resolve, reject) => {
+      sqliteDb.run(command, (err) => {
+        if (err) {
+          console.error(`Erro ao criar tabela: ${err.message}`);
+          console.error(`Comando: ${command}`);
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    }).catch(err => console.error('Erro ao configurar tabela:', err.message));
+  }
+  
+  console.log('✅ Tabelas essenciais verificadas/criadas no SQLite');
+};
 
-    // Testar a conexão com PostgreSQL imediatamente
-    const testConnection = async () => {
+// Interface de banco de dados usando a API do Supabase
+const setupSupabaseApi = () => {
+  console.log('🔄 Configurando acesso via Supabase API...');
+  
+  return {
+    async promiseAll(query, params = []) {
       try {
-        const client = await pool.connect();
-        console.log('✅ Conectado ao PostgreSQL com sucesso!');
-        console.log(`   Host: ${client.connectionParameters.host}`);
-        console.log(`   Database: ${client.connectionParameters.database}`);
-        console.log(`   User: ${client.connectionParameters.user}`);
-        client.release();
-        return true;
-      } catch (error) {
-        console.error('❌ Erro ao conectar ao PostgreSQL:');
-        console.error(`   Mensagem: ${error.message}`);
-        console.error(`   Código: ${error.code}`);
+        // Extrair o nome da tabela da consulta SQL
+        const tableMatch = query.match(/FROM\s+([^\s,]+)/i);
+        const table = tableMatch ? tableMatch[1] : null;
         
-        if (error.code === 'ECONNREFUSED') {
-          console.error(`   A conexão foi recusada. Verificando se o Postgres está acessível...`);
+        if (!table) {
+          throw new Error('Não foi possível identificar a tabela na consulta: ' + query);
         }
         
+        // Converter parâmetros do estilo ? para nomes de colunas e valores
+        // Esta é uma versão simplificada - para consultas complexas, será necessária uma conversão mais robusta
+        let supaQuery = supabase.from(table).select('*');
+        
+        // Se a consulta tiver WHERE, convertemos para filtros do Supabase
+        const whereMatch = query.match(/WHERE\s+([^\s]+)\s*=\s*\?/i);
+        if (whereMatch && params.length > 0) {
+          const column = whereMatch[1];
+          supaQuery = supaQuery.eq(column, params[0]);
+        }
+        
+        const { data, error } = await supaQuery;
+        
+        if (error) throw error;
+        return data || [];
+      } catch (error) {
+        console.error(`Erro ao executar query no Supabase (promiseAll):`, error.message);
+        console.error(`Query original: ${query}`);
+        console.error(`Params: ${JSON.stringify(params)}`);
         throw error;
       }
-    };
+    },
     
-    // Criar uma interface compatível com o resto do código usando PostgreSQL
-    db = {
-      async promiseAll(query, params) {
-        try {
-          const result = await pool.query(query, params);
-          return result.rows;
-        } catch (error) {
-          console.error(`Erro ao executar query (promiseAll): ${error.message}`);
-          console.error(`Query: ${query}`);
-          console.error(`Params: ${JSON.stringify(params)}`);
-          throw error;
-        }
-      },
-      async promiseGet(query, params) {
-        try {
-          const result = await pool.query(query, params);
-          return result.rows[0];
-        } catch (error) {
-          console.error(`Erro ao executar query (promiseGet): ${error.message}`);
-          console.error(`Query: ${query}`);
-          console.error(`Params: ${JSON.stringify(params)}`);
-          throw error;
-        }
-      },
-      async promiseRun(query, params) {
-        try {
-          const result = await pool.query(query, params);
-          return { changes: result.rowCount, lastID: null };
-        } catch (error) {
-          console.error(`Erro ao executar query (promiseRun): ${error.message}`);
-          console.error(`Query: ${query}`);
-          console.error(`Params: ${JSON.stringify(params)}`);
-          throw error;
-        }
-      },
-      close: () => pool.end()
-    };
+    async promiseGet(query, params = []) {
+      try {
+        // Similar ao promiseAll, mas retornando apenas o primeiro resultado
+        const results = await this.promiseAll(query, params);
+        return results[0] || null;
+      } catch (error) {
+        console.error(`Erro ao executar query no Supabase (promiseGet):`, error.message);
+        throw error;
+      }
+    },
     
-    // Tentar testar a conexão inicialmente
-    testConnection().catch(err => {
-      console.error('Erro no teste de conexão inicial ao PostgreSQL:', err);
-      console.error('⚠️ Alternando para SQLite como fallback...');
-      
-      // Se falhar, usar SQLite como fallback
-      const dbPath = path.join(__dirname, '../../data_prod.db');
-      db = setupSQLite(dbPath);
-    });
+    async promiseRun(query, params = []) {
+      try {
+        // Extrair o tipo de operação (INSERT, UPDATE, DELETE)
+        const operationType = query.trim().substring(0, 6).toUpperCase();
+        
+        // Extrair o nome da tabela
+        let tableMatch;
+        if (operationType === 'INSERT') {
+          tableMatch = query.match(/INTO\s+([^\s(]+)/i);
+        } else if (operationType === 'UPDATE') {
+          tableMatch = query.match(/UPDATE\s+([^\s]+)/i);
+        } else if (operationType === 'DELETE') {
+          tableMatch = query.match(/FROM\s+([^\s]+)/i);
+        }
+        
+        const table = tableMatch ? tableMatch[1] : null;
+        
+        if (!table) {
+          throw new Error('Não foi possível identificar a tabela na consulta: ' + query);
+        }
+        
+        let result;
+        
+        if (operationType === 'INSERT') {
+          // Para INSERT, precisamos extrair as colunas e valores
+          // Este é um exemplo simplificado - consultas mais complexas precisariam de um parser SQL
+          const data = {}; // Objeto para armazenar os pares coluna-valor
+          
+          // Extrair colunas da query
+          const columnsMatch = query.match(/\(([^)]+)\)/);
+          if (columnsMatch) {
+            const columns = columnsMatch[1].split(',').map(col => col.trim());
+            
+            // Associar cada coluna ao valor correspondente em params
+            columns.forEach((col, index) => {
+              if (index < params.length) {
+                data[col] = params[index];
+              }
+            });
+            
+            const { data: insertedData, error } = await supabase
+              .from(table)
+              .insert(data)
+              .select();
+              
+            if (error) throw error;
+            
+            result = { 
+              changes: insertedData ? insertedData.length : 0, 
+              lastID: insertedData && insertedData[0] ? insertedData[0].id : null 
+            };
+          } else {
+            throw new Error('Formato de INSERT não suportado: ' + query);
+          }
+        } else if (operationType === 'UPDATE') {
+          // Para UPDATE, precisamos extrair os valores a serem atualizados e a condição
+          // Este é um exemplo simplificado
+          const data = {};
+          
+          // Extrair colunas a serem atualizadas
+          const setMatch = query.match(/SET\s+([^WHERE]+)/i);
+          if (setMatch) {
+            const setParts = setMatch[1].split(',');
+            let paramIndex = 0;
+            
+            setParts.forEach(part => {
+              const keyValue = part.trim().split('=');
+              if (keyValue.length === 2) {
+                const key = keyValue[0].trim();
+                // Se o valor for um placeholder '?'
+                if (keyValue[1].trim() === '?') {
+                  data[key] = params[paramIndex++];
+                }
+              }
+            });
+            
+            // Extrair condição WHERE
+            const whereMatch = query.match(/WHERE\s+([^\s]+)\s*=\s*\?/i);
+            if (whereMatch && paramIndex < params.length) {
+              const column = whereMatch[1];
+              const value = params[paramIndex];
+              
+              const { data: updatedData, error } = await supabase
+                .from(table)
+                .update(data)
+                .eq(column, value)
+                .select();
+                
+              if (error) throw error;
+              
+              result = { changes: updatedData ? updatedData.length : 0 };
+            } else {
+              throw new Error('Condição WHERE não suportada ou faltando: ' + query);
+            }
+          }
+        } else if (operationType === 'DELETE') {
+          // Para DELETE, precisamos extrair a condição
+          const whereMatch = query.match(/WHERE\s+([^\s]+)\s*=\s*\?/i);
+          
+          if (whereMatch && params.length > 0) {
+            const column = whereMatch[1];
+            const value = params[0];
+            
+            const { data: deletedData, error } = await supabase
+              .from(table)
+              .delete()
+              .eq(column, value)
+              .select();
+              
+            if (error) throw error;
+            
+            result = { changes: deletedData ? deletedData.length : 0 };
+          } else {
+            throw new Error('Condição WHERE não suportada ou faltando para DELETE: ' + query);
+          }
+        } else {
+          throw new Error('Operação não suportada: ' + operationType);
+        }
+        
+        return result;
+      } catch (error) {
+        console.error(`Erro ao executar query no Supabase (promiseRun):`, error.message);
+        console.error(`Query: ${query}`);
+        console.error(`Params: ${JSON.stringify(params)}`);
+        throw error;
+      }
+    },
+    
+    // Função close é um no-op para a API Supabase
+    close: () => console.log('Conexão com Supabase API fechada (ação virtual)')
+  };
+};
+
+// Decidir qual implementação de banco de dados usar
+if (isProduction && !forceSqlite && useSupabaseApi) {
+  try {
+    // Usar a API do Supabase
+    console.log('Usando Supabase API para acesso ao banco de dados');
+    db = setupSupabaseApi();
   } catch (error) {
-    // Em caso de qualquer erro na configuração do PostgreSQL, usar SQLite como fallback
-    console.error('❌ Erro na configuração do PostgreSQL:', error.message);
+    console.error('❌ Erro ao configurar cliente da API Supabase:', error.message);
     console.error('⚠️ Usando SQLite como fallback em produção');
     
     const dbPath = path.join(__dirname, '../../data_prod.db');
@@ -196,19 +327,24 @@ if (isProduction && !forceSqlite) {
     ? process.env.DB_PATH 
     : path.join(__dirname, '../../data.db');
   
+  console.log('Usando SQLite (ambiente de desenvolvimento ou forçado)');
   db = setupSQLite(dbPath);
 }
 
 // Fechar a conexão quando o processo terminar
 process.on('SIGINT', () => {
-  db.close((err) => {
-    if (err) {
-      console.error('Erro ao fechar o banco de dados:', err);
-    } else {
-      console.log('Conexão com o banco de dados fechada');
-    }
+  if (db && typeof db.close === 'function') {
+    db.close((err) => {
+      if (err) {
+        console.error('Erro ao fechar o banco de dados:', err);
+      } else {
+        console.log('Conexão com o banco de dados fechada');
+      }
+      process.exit(0);
+    });
+  } else {
     process.exit(0);
-  });
+  }
 });
 
 module.exports = db;
