@@ -80,19 +80,30 @@ if (!isDev && !sessionSecret) {
   console.error('⚠️ RECOMENDAÇÃO: Configure a variável de ambiente SESSION_SECRET no seu servidor Render.');
 }
 
+// Função para configuração básica da sessão, sem armazenamento no banco de dados
+const getBasicSessionConfig = () => ({
+  secret: sessionSecret || (isDev ? 'app_empreiteiros_secret_dev' : defaultProductionSecret),
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 1000 * 60 * 60 * 24,
+    secure: !isDev,
+    httpOnly: true,
+    sameSite: !isDev ? 'lax' : false
+  }
+});
+
 if (isDev) {
-  sessionConfig = {
-    secret: sessionSecret || 'app_empreiteiros_secret_dev',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      maxAge: 1000 * 60 * 60 * 24,
-      secure: false,
-      httpOnly: true
-    }
-  };
+  // Em desenvolvimento, usar a configuração básica
+  sessionConfig = getBasicSessionConfig();
 } else {
+  // Em produção, tentar usar PgSession, mas com fallback
   try {
+    // Verificar se a variável DATABASE_URL está definida
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL não definida. Usando armazenamento de sessão em memória.');
+    }
+
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false },
@@ -102,7 +113,17 @@ if (isDev) {
       connectionTimeoutMillis: 5000 // tempo limite menor para sessões
     });
 
-    // Melhorar o log de teste de conexão
+    // Configuração com armazenamento PostgreSQL
+    sessionConfig = {
+      ...getBasicSessionConfig(),
+      store: new PgSession({
+        pool,
+        tableName: 'session',
+        createTableIfMissing: true
+      }),
+    };
+
+    // Teste de conexão (assíncrono, apenas para log)
     pool.query('SELECT NOW()')
       .then(result => {
         const timestamp = result.rows[0].now;
@@ -111,42 +132,14 @@ if (isDev) {
       .catch(err => {
         console.error('⚠️ Erro ao testar conexão com banco para sessão:');
         console.error(`   Mensagem: ${err.message}`);
-        console.error(`   Código: ${err.code || 'N/A'}`);
-        
-        if (err.message.includes('ECONNREFUSED')) {
-          console.error(`🔄 Tentando conexão com host alternativo...`);
-        }
+        console.error(`   Usando armazenamento de sessão em memória como fallback.`);
+        // Mudar para sessão em memória se a conexão falhar
+        sessionConfig = getBasicSessionConfig();
       });
-
-    sessionConfig = {
-      store: new PgSession({
-        pool,
-        tableName: 'session',
-        createTableIfMissing: true
-      }),
-      secret: sessionSecret || defaultProductionSecret,
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        maxAge: 1000 * 60 * 60 * 24,
-        secure: true,
-        httpOnly: true,
-        sameSite: 'lax'
-      }
-    };
   } catch (error) {
-    console.error('❌ Erro CRÍTICO ao configurar PgSession. Usando sessão em memória como fallback:', error.message);
-    sessionConfig = {
-      secret: sessionSecret || defaultProductionSecret,
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        maxAge: 1000 * 60 * 60 * 24,
-        secure: true,
-        httpOnly: true,
-        sameSite: 'lax'
-      }
-    };
+    console.error('❌ Erro ao configurar PgSession. Usando sessão em memória como fallback:', error.message);
+    // Usar configuração básica (memória) em caso de erro
+    sessionConfig = getBasicSessionConfig();
   }
 }
 
@@ -160,6 +153,7 @@ app.use(csrfProtection);
 // Middleware para disponibilizar variáveis globais para as views
 app.use((req, res, next) => {
   res.locals.user = req.session.user || null;
+  res.locals.usuario = req.session.user || null; // Adicionando variável usuario para compatibilidade
   res.locals.success_msg = req.flash('success_msg');
   res.locals.error_msg = req.flash('error_msg');
   res.locals.title = 'App Empreiteiros';
