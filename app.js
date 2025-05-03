@@ -95,12 +95,28 @@ if (isDev) {
   try {
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
+      ssl: { rejectUnauthorized: false },
+      // Adicionar configurações para melhorar a estabilidade da conexão
+      max: 10, // máximo de conexões no pool para a sessão
+      idleTimeoutMillis: 30000, // tempo máximo que uma conexão pode ficar inativa
+      connectionTimeoutMillis: 5000 // tempo limite menor para sessões
     });
 
+    // Melhorar o log de teste de conexão
     pool.query('SELECT NOW()')
-      .then(() => console.log('✅ Banco de dados conectado com sucesso para sessão'))
-      .catch(err => console.error('⚠️ Erro ao testar conexão com banco para sessão:', err.message));
+      .then(result => {
+        const timestamp = result.rows[0].now;
+        console.log(`✅ Banco de dados conectado com sucesso para sessão (${timestamp})`);
+      })
+      .catch(err => {
+        console.error('⚠️ Erro ao testar conexão com banco para sessão:');
+        console.error(`   Mensagem: ${err.message}`);
+        console.error(`   Código: ${err.code || 'N/A'}`);
+        
+        if (err.message.includes('ECONNREFUSED')) {
+          console.error(`🔄 Tentando conexão com host alternativo...`);
+        }
+      });
 
     sessionConfig = {
       store: new PgSession({
