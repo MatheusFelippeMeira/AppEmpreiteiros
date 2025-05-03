@@ -76,7 +76,8 @@ router.get('/login', (req, res) => {
   
   res.render('auth/login', { 
     title: 'Login',
-    hideNavbar: true,
+    hideNav: true, // Usando hideNav para compatibilidade com o layout
+    hideNavbar: true, // Mantendo para compatibilidade
     error: req.query.error,
     pageScripts: loginScript
   });
@@ -218,7 +219,8 @@ router.get('/registro', (req, res) => {
   
   res.render('auth/registro', { 
     title: 'Registro',
-    hideNavbar: true,
+    hideNav: true, // Usando hideNav para compatibilidade com o layout
+    hideNavbar: true, // Mantendo para compatibilidade
     pageScripts: registroScript
   });
 });

@@ -20,7 +20,7 @@
 </head>
 <body>
     <!-- Navbar -->
-    <% if (typeof hideNav === 'undefined' || !hideNav) { %>
+    <% if ((typeof hideNav === 'undefined' || !hideNav) && (typeof hideNavbar === 'undefined' || !hideNavbar)) { %>
         <%- include('../partials/navbar') %>
     <% } %>
 
@@ -45,7 +45,7 @@
         <% } %>
 
         <!-- Conteúdo da página -->
-        <%- body %>
+        <%- corpo %>
     </main>
 
     <!-- Footer -->
