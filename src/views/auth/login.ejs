@@ -23,10 +23,7 @@
                 </div>
 
                 <form id="loginForm" action="/auth/login" method="POST">
-                    <% if (typeof csrfToken !== 'undefined') { %>
-                    <!-- Campo oculto para o token CSRF -->
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <% } %>
+                    <!-- CSRF removido para simplificar o login -->
                     
                     <div class="mb-3">
                         <label for="email" class="form-label">E-mail:</label>

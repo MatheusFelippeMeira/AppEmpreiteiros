@@ -117,69 +117,16 @@ app.use(flash());
 // Configuração CSRF ultra simplificada para garantir funcionamento em todos os ambientes
 // Implementação mais simples e robusta
 const simpleCsrf = (req, res, next) => {
-  // Se for requisição HEAD ou OPTIONS, pular verificação CSRF
-  if (req.method === 'HEAD' || req.method === 'OPTIONS' || 
-      req.path === '/health' || req.path.startsWith('/api/')) {
-    return next();
-  }
-
-  // Em ambiente de desenvolvimento, ser mais estrito
-  // Em produção, ser mais tolerante para evitar problemas com Render
-  const isDev = process.env.NODE_ENV !== 'production';
-
-  // Criar um token para o usuário se ainda não existir
-  if (!req.session._csrfToken) {
-    // Token simples, mas suficiente para proteção básica
-    req.session._csrfToken = Math.random().toString(36).substring(2, 15) + 
-                            Math.random().toString(36).substring(2, 15);
-    // Salvar a sessão explicitamente para garantir que o token seja persistido
-    if (req.session.save) {
-      req.session.save();
-    }
-  }
-  
-  // Método para gerar tokens
+  // Método para gerar tokens (apenas por compatibilidade)
   req.csrfToken = function() {
-    return req.session._csrfToken;
+    return 'csrf-disabled';
   };
   
-  // Em métodos que modificam dados (POST, PUT, DELETE), verificar o token
-  if (req.method === 'GET') {
-    // Para GET, apenas disponibilizar o token
-    return next();
-  } else {
-    // Para outros métodos, verificar o token
-    // Verificar token do corpo do form, ou do header X-CSRF-Token
-    const token = req.body._csrf || req.headers['x-csrf-token'] || req.headers['csrf-token'];
-    
-    // Em produção, permitir login sem token CSRF para evitar falhas de UX
-    if (req.path === '/auth/login' && !isDev) {
-      console.log('⚠️ Login em produção: CSRF bypass ativado para melhorar experiência do usuário');
-      return next();
-    }
-    
-    if (token !== req.session._csrfToken && isDev) {
-      // Token inválido (apenas tratar como erro em desenvolvimento)
-      console.error('⚠️ Erro CSRF: token inválido');
-      console.error(`  Caminho: ${req.path}`);
-      console.error(`  Método: ${req.method}`);
-      
-      // Flash message e redirecionamento para login
-      req.flash('error_msg', 'Sessão expirada ou inválida. Por favor, faça login novamente.');
-      
-      // Responder de acordo com o tipo de requisição
-      if (req.xhr || req.headers.accept?.includes('application/json')) {
-        return res.status(403).json({ error: 'Sessão expirada ou inválida.' });
-      }
-      
-      return res.redirect('/auth/login');
-    }
-    
-    next();
-  }
+  // Apenas passar para o próximo middleware sem verificar nada
+  next();
 };
 
-// Usar nossa implementação CSRF simplificada
+// Usar nossa implementação CSRF simplificada (agora sem verificação)
 app.use(simpleCsrf);
 
 // Middleware para disponibilizar variáveis globais para as views

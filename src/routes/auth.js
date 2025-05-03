@@ -11,66 +11,11 @@ router.get('/login', (req, res) => {
     return res.redirect('/dashboard');
   }
   
-  // Preparar um script específico para a página de login
+  // Script simplificado para login direto sem verificações complexas
   const loginScript = `
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const loginForm = document.getElementById('loginForm');
-      
-      if (loginForm) {
-        loginForm.addEventListener('submit', function(event) {
-          event.preventDefault();
-          
-          // Desabilita o botão para evitar cliques múltiplos
-          const submitButton = loginForm.querySelector('button[type="submit"]');
-          submitButton.disabled = true;
-          submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Entrando...';
-          
-          // Obter os dados do formulário
-          const formData = new FormData(loginForm);
-          const formDataObj = {};
-          formData.forEach((value, key) => formDataObj[key] = value);
-          
-          // Enviar a requisição via fetch API
-          fetch('/auth/login', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify(formDataObj),
-            credentials: 'same-origin'
-          })
-          .then(response => {
-            return response.json();
-          })
-          .then(data => {
-            if (data.success) {
-              console.log('Login bem-sucedido, redirecionando...');
-              window.location.href = data.redirect || '/dashboard';
-            } else {
-              submitButton.disabled = false;
-              submitButton.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Entrar';
-              
-              // Exibir mensagem de erro
-              const errorMessage = document.getElementById('errorMessage');
-              if (errorMessage) {
-                errorMessage.textContent = data.message || 'Erro no login';
-                errorMessage.parentElement.style.display = 'block';
-              } else {
-                alert(data.message || 'Erro no login');
-              }
-            }
-          })
-          .catch(error => {
-            console.error('Erro ao fazer login:', error);
-            submitButton.disabled = false;
-            submitButton.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Entrar';
-            alert('Erro ao processar login. Por favor, tente novamente.');
-          });
-        });
-      }
-    });
+    console.log('Login simplificado ativado');
+    // Deixando o formulário funcionar normalmente
   </script>
   `;
   
@@ -87,25 +32,42 @@ router.get('/login', (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, senha } = req.body;
+    console.log('Tentativa de login para:', email);
     
     // Buscar usuário pelo email (corrigindo nome da tabela de usuarios para users)
     const user = await db.promiseGet('SELECT * FROM users WHERE email = ?', [email]);
     
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Email ou senha incorretos'
-      });
+      console.log('Usuário não encontrado:', email);
+      // Verifica se é uma requisição AJAX (espera JSON) ou submissão de formulário tradicional
+      if (req.xhr || req.headers.accept?.includes('application/json')) {
+        return res.status(401).json({
+          success: false,
+          message: 'Email ou senha incorretos'
+        });
+      } else {
+        // Para submissão tradicional, redirecionar com mensagem de erro
+        req.flash('error', 'Email ou senha incorretos');
+        return res.redirect('/auth/login?error=Email ou senha incorretos');
+      }
     }
     
     // Verificar senha
     const senhaValida = await bcrypt.compare(senha, user.senha);
     
     if (!senhaValida) {
-      return res.status(401).json({
-        success: false,
-        message: 'Email ou senha incorretos'
-      });
+      console.log('Senha inválida para usuário:', email);
+      // Verifica se é uma requisição AJAX (espera JSON) ou submissão de formulário tradicional
+      if (req.xhr || req.headers.accept?.includes('application/json')) {
+        return res.status(401).json({
+          success: false,
+          message: 'Email ou senha incorretos'
+        });
+      } else {
+        // Para submissão tradicional, redirecionar com mensagem de erro
+        req.flash('error', 'Email ou senha incorretos');
+        return res.redirect('/auth/login?error=Email ou senha incorretos');
+      }
     }
     
     // Criar objeto de usuário para sessão (sem a senha)
@@ -122,19 +84,31 @@ router.post('/login', async (req, res) => {
     // Adicionar log para debug
     console.log('Login bem-sucedido para:', email);
     
-    // Retornar resposta JSON com sucesso
-    res.json({
-      success: true,
-      message: 'Login bem-sucedido',
-      redirect: '/dashboard'
-    });
+    // Responder de acordo com o tipo de requisição
+    if (req.xhr || req.headers.accept?.includes('application/json')) {
+      // Para requisições AJAX
+      res.json({
+        success: true,
+        message: 'Login bem-sucedido',
+        redirect: '/dashboard'
+      });
+    } else {
+      // Para submissões de formulário tradicionais
+      res.redirect('/dashboard');
+    }
     
   } catch (err) {
     console.error('Erro no login:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Erro interno do servidor'
-    });
+    
+    if (req.xhr || req.headers.accept?.includes('application/json')) {
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor'
+      });
+    } else {
+      req.flash('error', 'Erro ao processar login. Tente novamente.');
+      res.redirect('/auth/login?error=Erro interno do servidor');
+    }
   }
 });
 

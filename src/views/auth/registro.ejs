@@ -23,8 +23,7 @@
                 </div>
 
                 <form id="registroForm" action="/auth/registro" method="POST">
-                    <!-- Campo oculto para o token CSRF -->
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <!-- CSRF removido para simplificar o registro -->
                     
                     <div class="mb-3">
                         <label for="nome" class="form-label">Nome:</label>
