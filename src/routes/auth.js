@@ -57,8 +57,34 @@ router.post('/login', async (req, res) => {
     console.log('Login bem-sucedido para:', email);
     console.log('Sessão do usuário:', req.session.user);
     
-    // Redirecionar para o dashboard
-    res.redirect('/');
+    // Salvar a sessão explicitamente antes de redirecionar
+    req.session.save((err) => {
+      if (err) {
+        console.error('Erro ao salvar sessão:', err);
+        return res.status(500).render('error', { 
+          title: 'Erro', 
+          message: 'Erro ao salvar sessão', 
+          error: err 
+        });
+      }
+      
+      // Verificar se o cliente aceita HTML ou prefere JSON
+      const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
+      
+      if (acceptsHtml) {
+        // Redirecionar normalmente para navegadores
+        console.log('Redirecionando usuário para dashboard');
+        return res.redirect('/dashboard');
+      } else {
+        // Para requisições de API, retornar JSON com URL de redirecionamento
+        console.log('Retornando JSON com URL de redirecionamento');
+        return res.json({ 
+          success: true, 
+          redirect: '/dashboard',
+          message: 'Login bem-sucedido'
+        });
+      }
+    });
   } catch (err) {
     console.error('Erro no login:', err);
     res.status(500).render('error', { 
@@ -128,8 +154,33 @@ router.post('/registro', async (req, res) => {
     console.log('Registro bem-sucedido para:', email);
     console.log('Sessão do usuário:', req.session.user);
     
-    // Redirecionar para o dashboard
-    res.redirect('/');
+    // Salvar a sessão explicitamente antes de redirecionar
+    req.session.save((err) => {
+      if (err) {
+        console.error('Erro ao salvar sessão:', err);
+        return res.status(500).render('error', { 
+          title: 'Erro', 
+          message: 'Erro ao salvar sessão', 
+          error: err 
+        });
+      }
+      
+      // Verificar se o cliente aceita HTML ou prefere JSON
+      const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
+      
+      if (acceptsHtml) {
+        // Redirecionar normalmente para navegadores
+        console.log('Redirecionando novo usuário para dashboard');
+        return res.redirect('/dashboard');
+      } else {
+        // Para requisições de API, retornar JSON com URL de redirecionamento
+        return res.json({ 
+          success: true, 
+          redirect: '/dashboard',
+          message: 'Registro bem-sucedido'
+        });
+      }
+    });
   } catch (err) {
     console.error('Erro no registro:', err);
     res.status(500).render('error', { 

@@ -18,7 +18,7 @@
                     </div>
                 <% } %>
 
-                <form action="/auth/registro" method="POST">
+                <form id="registroForm" action="/auth/registro" method="POST">
                     <!-- Campo oculto para o token CSRF -->
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     
@@ -72,3 +72,73 @@
         </div>
     </div>
 </div>
+
+<!-- Script para garantir redirecionamento no registro -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const registroForm = document.getElementById('registroForm');
+    
+    if (registroForm) {
+        registroForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            // Validação básica do lado do cliente
+            const senha = document.getElementById('senha').value;
+            const confirmarSenha = document.getElementById('confirmar_senha').value;
+            
+            if (senha !== confirmarSenha) {
+                alert('As senhas não coincidem!');
+                return;
+            }
+            
+            // Obter os dados do formulário
+            const formData = new FormData(registroForm);
+            
+            // Enviar a requisição via fetch API
+            fetch('/auth/registro', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json, text/html'
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                // Verificar se a resposta é um redirecionamento
+                if (response.redirected) {
+                    window.location.href = response.url;
+                    return;
+                }
+                
+                // Tentar interpretar como JSON
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    return response.json().then(data => {
+                        if (data.success && data.redirect) {
+                            window.location.href = data.redirect;
+                        } else if (data.error) {
+                            // Exibir mensagem de erro
+                            alert('Erro: ' + data.error);
+                        } else {
+                            // Recarregar a página para exibir mensagens de erro do servidor
+                            window.location.reload();
+                        }
+                    });
+                } else {
+                    // Se não for JSON, simplesmente recarregue a página para mostrar o HTML retornado
+                    document.open();
+                    response.text().then(html => {
+                        document.write(html);
+                        document.close();
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao fazer registro:', error);
+                // Em caso de falha na requisição, submeter o formulário normalmente
+                registroForm.submit();
+            });
+        });
+    }
+});
+</script>

@@ -18,7 +18,7 @@
                     </div>
                 <% } %>
 
-                <form action="/auth/login" method="POST">
+                <form id="loginForm" action="/auth/login" method="POST">
                     <!-- Campo oculto para o token CSRF -->
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     
@@ -56,3 +56,65 @@
         </div>
     </div>
 </div>
+
+<!-- Script para garantir redirecionamento no login -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const loginForm = document.getElementById('loginForm');
+    
+    if (loginForm) {
+        loginForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            // Obter os dados do formulário
+            const formData = new FormData(loginForm);
+            
+            // Enviar a requisição via fetch API
+            fetch('/auth/login', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    // Não definir Content-Type, deixe o navegador configurar com boundary para FormData
+                    'Accept': 'application/json, text/html'
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                // Verificar primeiro se a resposta é um redirecionamento
+                if (response.redirected) {
+                    window.location.href = response.url;
+                    return;
+                }
+                
+                // Tentar interpretar como JSON
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    return response.json().then(data => {
+                        if (data.success && data.redirect) {
+                            window.location.href = data.redirect;
+                        } else if (data.error) {
+                            // Exibir mensagem de erro
+                            alert('Erro: ' + data.error);
+                        } else {
+                            // Recarregar a página para exibir mensagens de erro do servidor
+                            window.location.reload();
+                        }
+                    });
+                } else {
+                    // Se não for JSON, simplesmente recarregue a página para mostrar o HTML retornado
+                    document.open();
+                    response.text().then(html => {
+                        document.write(html);
+                        document.close();
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao fazer login:', error);
+                // Em caso de falha na requisição, submeter o formulário normalmente
+                loginForm.submit();
+            });
+        });
+    }
+});
+</script>
