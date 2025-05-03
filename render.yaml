@@ -13,7 +13,7 @@ services:
     # Configurações para estabilidade
     disk:
       name: uploads
-      mountPath: /opt/render/project/src/src/public/uploads
+      mountPath: /opt/render/project/src/public/uploads # Correção: removido /src duplicado
       sizeGB: 1
     envVars:
       - key: NODE_ENV
@@ -27,7 +27,7 @@ services:
           name: app-empreiteiros-db
           property: connectionString
       - key: UPLOADS_FOLDER
-        value: /opt/render/project/src/src/public/uploads
+        value: /opt/render/project/src/public/uploads # Correção: removido /src duplicado
     # Configurações de inicialização e reinicialização automática
     scaling:
       minInstances: 1
