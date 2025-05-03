@@ -9,7 +9,6 @@ const compression = require('compression');
 const { Pool } = require('pg');
 const ejsLayouts = require('express-ejs-layouts');
 const methodOverride = require('method-override'); // Importar method-override
-const csrf = require('csurf'); // Importar proteção CSRF
 
 // Importação de rotas
 const authRoutes = require('./src/routes/auth');
@@ -156,115 +155,72 @@ if (isDev || forceSqliteSession) {
 app.use(session(sessionConfig));
 app.use(flash());
 
-// Configuração simplificada de proteção CSRF para funcionar em todos os ambientes
-let csrfProtection;
-
-try {
-  // Tentar criar o middleware CSRF com configuração apropriada para o ambiente
-  if (isDev) {
-    // Em desenvolvimento, usa configuração simples
-    csrfProtection = csrf({
-      cookie: false, // Usar sessão em vez de cookies
-      ignoreMethods: ['HEAD', 'OPTIONS'] // Ignorar métodos que normalmente não precisam de proteção
-    });
-  } else {
-    // Em produção, usar configuração com cookie ou sessão dependendo da disponibilidade
-    if (process.env.DATABASE_URL) {
-      // Se temos banco de dados, preferir usar sessão
-      csrfProtection = csrf({
-        cookie: false,
-        ignoreMethods: ['HEAD', 'OPTIONS']
-      });
-    } else {
-      // Se não temos banco de dados, usar cookie signed (mais seguro) ou sessão como fallback
-      csrfProtection = csrf({
-        cookie: {
-          secure: true,
-          httpOnly: true,
-          sameSite: 'lax',
-          signed: false // Não é necessário assinar o cookie CSRF
-        },
-        ignoreMethods: ['HEAD', 'OPTIONS']
-      });
-    }
-  }
-  
-  console.log('✅ Proteção CSRF configurada com sucesso');
-} catch (error) {
-  console.error('❌ Erro ao configurar CSRF:', error.message);
-  // Criar um middleware de fallback que não bloqueia a aplicação
-  csrfProtection = (req, res, next) => {
-    res.locals.csrfToken = 'disabled-for-safety';
-    next();
-  };
-  console.warn('⚠️ AVISO: Proteção CSRF desativada devido a erro de configuração');
-}
-
-// Uso de CSRF com tratamento adequado de erros
-app.use((req, res, next) => {
-  // Ignorar CSRF em rotas específicas ou métodos HEAD/OPTIONS
-  if (req.path === '/health' || 
-      req.path.startsWith('/api/') || 
-      req.method === 'HEAD' || 
-      req.method === 'OPTIONS') {
+// Configuração CSRF ultra simplificada para garantir funcionamento em todos os ambientes
+// Implementação mais simples e robusta
+const simpleCsrf = (req, res, next) => {
+  // Se for requisição HEAD ou OPTIONS, pular verificação CSRF
+  if (req.method === 'HEAD' || req.method === 'OPTIONS' || 
+      req.path === '/health' || req.path.startsWith('/api/')) {
     return next();
   }
-  
-  // Se tivermos um middleware CSRF válido, usá-lo
-  if (typeof csrfProtection === 'function') {
-    return csrfProtection(req, res, (err) => {
-      if (err && err.code === 'EBADCSRFTOKEN') {
-        // Se ocorrer erro de CSRF, registrar e renderizar tela de erro específica
-        console.error('⚠️ Erro de token CSRF inválido:', err.message);
-        console.error(`  Caminho: ${req.path}`);
-        console.error(`  Método: ${req.method}`);
-        
-        // Enviar flash message e redirecionar para login em caso de erro CSRF
-        req.flash('error_msg', 'Sessão expirada ou inválida. Por favor, faça login novamente.');
-        
-        // Em caso de AJAX, retornar erro em JSON
-        if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
-          return res.status(403).json({ error: 'Sessão expirada ou inválida.' });
-        }
-        
-        return res.redirect('/auth/login');
-      }
-      next(err);
-    });
+
+  // Criar um token para o usuário se ainda não existir
+  if (!req.session._csrfToken) {
+    // Token simples, mas suficiente para proteção básica
+    req.session._csrfToken = Math.random().toString(36).substring(2, 15) + 
+                            Math.random().toString(36).substring(2, 15);
   }
   
-  // Fallback se algo deu errado com o CSRF
-  next();
-});
+  // Método para gerar tokens
+  req.csrfToken = function() {
+    return req.session._csrfToken;
+  };
+  
+  // Em métodos que modificam dados (POST, PUT, DELETE), verificar o token
+  if (req.method === 'GET') {
+    // Para GET, apenas disponibilizar o token
+    return next();
+  } else {
+    // Para outros métodos, verificar o token
+    // Verificar token do corpo do form, ou do header X-CSRF-Token
+    const token = req.body._csrf || req.headers['x-csrf-token'] || req.headers['csrf-token'];
+    
+    if (token !== req.session._csrfToken) {
+      // Token inválido
+      console.error('⚠️ Erro CSRF: token inválido');
+      console.error(`  Caminho: ${req.path}`);
+      console.error(`  Método: ${req.method}`);
+      
+      // Flash message e redirecionamento para login
+      req.flash('error_msg', 'Sessão expirada ou inválida. Por favor, faça login novamente.');
+      
+      // Responder de acordo com o tipo de requisição
+      if (req.xhr || req.headers.accept?.includes('application/json')) {
+        return res.status(403).json({ error: 'Sessão expirada ou inválida.' });
+      }
+      
+      return res.redirect('/auth/login');
+    }
+    
+    next();
+  }
+};
+
+// Usar nossa implementação CSRF simplificada
+app.use(simpleCsrf);
 
 // Middleware para disponibilizar variáveis globais para as views
 app.use((req, res, next) => {
-  try {
-    // Disponibiliza o token CSRF para todas as views se estiver disponível
-    if (req.csrfToken && typeof req.csrfToken === 'function') {
-      res.locals.csrfToken = req.csrfToken();
-    } else if (!res.locals.csrfToken) {
-      // Se não temos um token disponível, usar um valor de fallback
-      res.locals.csrfToken = 'disabled-for-safety';
-    }
-    
-    res.locals.user = req.session.user || null;
-    res.locals.usuario = req.session.user || null; // Adicionando variável usuario para compatibilidade
-    res.locals.success_msg = req.flash('success_msg');
-    res.locals.error_msg = req.flash('error_msg');
-    res.locals.title = 'App Empreiteiros';
-    next();
-  } catch (error) {
-    // Se houver erro ao gerar token CSRF, log e continuar
-    console.error('Erro ao gerar token CSRF:', error.message);
-    res.locals.user = req.session.user || null;
-    res.locals.usuario = req.session.user || null;
-    res.locals.success_msg = req.flash('success_msg');
-    res.locals.error_msg = req.flash('error_msg');
-    res.locals.title = 'App Empreiteiros';
-    res.locals.csrfToken = 'disabled-for-safety'; // Valor de fallback para evitar quebrar os templates
-    next();
-  }
+  res.locals.user = req.session.user || null;
+  res.locals.usuario = req.session.user || null; // Variável adicional para compatibilidade
+  res.locals.success_msg = req.flash('success_msg');
+  res.locals.error_msg = req.flash('error_msg');
+  res.locals.title = 'App Empreiteiros';
+  
+  // Adicionar token CSRF para templates
+  res.locals.csrfToken = req.csrfToken();
+  
+  next();
 });
 
 // Health check melhorado para o Render
