@@ -71,13 +71,19 @@ if (isDev) {
 // Configuração de sessão
 let sessionConfig;
 const sessionSecret = process.env.SESSION_SECRET;
+const forceSqliteSession = process.env.FORCE_SQLITE === 'true';
 
 // Definir um secret padrão para produção (não ideal, mas evita erros fatais)
 const defaultProductionSecret = 'app_empreiteiros_secret_production_' + new Date().getFullYear();
 
+// Avisos sobre variáveis de ambiente
 if (!isDev && !sessionSecret) {
   console.error('⚠️ AVISO: SESSION_SECRET não definida no ambiente de produção! Usando secret temporário.');
   console.error('⚠️ RECOMENDAÇÃO: Configure a variável de ambiente SESSION_SECRET no seu servidor Render.');
+}
+
+if (forceSqliteSession) {
+  console.log('⚠️ AVISO: Sessão baseada em SQLite forçada por variável de ambiente FORCE_SQLITE=true');
 }
 
 // Função para configuração básica da sessão, sem armazenamento no banco de dados
@@ -93,15 +99,16 @@ const getBasicSessionConfig = () => ({
   }
 });
 
-if (isDev) {
-  // Em desenvolvimento, usar a configuração básica
+// Em ambiente de desenvolvimento ou quando forçado SQLite
+if (isDev || forceSqliteSession) {
   sessionConfig = getBasicSessionConfig();
+  console.log('Usando armazenamento de sessão em memória (ambiente de desenvolvimento ou FORCE_SQLITE=true)');
 } else {
   // Em produção, tentar usar PgSession, mas com fallback
   try {
     // Verificar se a variável DATABASE_URL está definida
     if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL não definida. Usando armazenamento de sessão em memória.');
+      throw new Error('DATABASE_URL não definida para sessão. Usando armazenamento em memória.');
     }
 
     const pool = new Pool({
@@ -119,25 +126,28 @@ if (isDev) {
       store: new PgSession({
         pool,
         tableName: 'session',
-        createTableIfMissing: true
+        createTableIfMissing: true,
+        errorLog: console.error // Adicionar log de erros explícito
       }),
     };
 
-    // Teste de conexão (assíncrono, apenas para log)
+    // Teste de conexão para sessão (assíncrono)
     pool.query('SELECT NOW()')
       .then(result => {
         const timestamp = result.rows[0].now;
         console.log(`✅ Banco de dados conectado com sucesso para sessão (${timestamp})`);
       })
       .catch(err => {
-        console.error('⚠️ Erro ao testar conexão com banco para sessão:');
-        console.error(`   Mensagem: ${err.message}`);
-        console.error(`   Usando armazenamento de sessão em memória como fallback.`);
-        // Mudar para sessão em memória se a conexão falhar
+        console.error('⚠️ Erro ao conectar ao banco para sessão:', err.message);
+        console.error('⚠️ Usando armazenamento de sessão em memória como fallback');
+        
+        // Em caso de erro de conexão, reverter para sessão em memória
         sessionConfig = getBasicSessionConfig();
       });
   } catch (error) {
-    console.error('❌ Erro ao configurar PgSession. Usando sessão em memória como fallback:', error.message);
+    console.error('❌ Erro ao configurar PgSession:', error.message);
+    console.error('⚠️ Usando sessão em memória como fallback');
+    
     // Usar configuração básica (memória) em caso de erro
     sessionConfig = getBasicSessionConfig();
   }
