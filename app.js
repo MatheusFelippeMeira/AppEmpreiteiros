@@ -105,13 +105,28 @@ if (isDev || forceSqliteSession) {
 } else {
   // Em produção, tentar usar PgSession, mas com fallback
   try {
-    // Verificar se a variável DATABASE_URL está definida
-    if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL não definida para sessão. Usando armazenamento em memória.');
+    // Tentar usar DATABASE_URL primeiro, depois tentar construir uma URL com as credenciais do Supabase
+    let connectionString = process.env.DATABASE_URL;
+    
+    // Se não tiver DATABASE_URL, mas tiver credenciais do Supabase, construir uma URL
+    if (!connectionString && process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+      // Usar URL do Supabase para construir a conexão PostgreSQL
+      const supabaseUrl = process.env.SUPABASE_URL || 'https://swrnbxuvewboetodewbi.supabase.co';
+      const projectId = supabaseUrl.split('https://')[1]?.split('.')[0] || 'swrnbxuvewboetodewbi';
+      
+      console.log('⚠️ DATABASE_URL não encontrada, tentando construir uma URL com credenciais do Supabase');
+      // Construindo uma URL PostgreSQL compatível com o formato que o Supabase espera
+      connectionString = `postgres://postgres:${process.env.SUPABASE_KEY}@db.${projectId}.supabase.co:5432/postgres`;
+      console.log('📝 URL de conexão construída para sessão (escondendo credenciais)');
+    }
+    
+    // Verificar se temos uma URL de conexão
+    if (!connectionString) {
+      throw new Error('Nenhuma URL de conexão disponível para sessão. Usando armazenamento em memória.');
     }
 
     const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString,
       ssl: { rejectUnauthorized: false },
       // Adicionar configurações para melhorar a estabilidade da conexão
       max: 10, // máximo de conexões no pool para a sessão
@@ -231,8 +246,13 @@ app.use((req, res, next) => {
   res.locals.error_msg = req.flash('error_msg');
   res.locals.title = 'App Empreiteiros';
   
-  // Adicionar token CSRF para templates
-  res.locals.csrfToken = req.csrfToken();
+  // Adicionar token CSRF para templates (com fallback para evitar erros)
+  try {
+    res.locals.csrfToken = typeof req.csrfToken === 'function' ? req.csrfToken() : 'csrf-disabled';
+  } catch (e) {
+    console.warn('⚠️ Aviso: Não foi possível gerar token CSRF:', e.message);
+    res.locals.csrfToken = 'csrf-disabled';
+  }
   
   next();
 });
@@ -321,8 +341,33 @@ app.use((err, req, res, next) => {
 // Inicialização do servidor
 if (require.main === module) {
   if (!isDev) {
+    // Usar a mesma lógica para obter a URL de conexão que usamos para a sessão
+    let connectionString = process.env.DATABASE_URL;
+    
+    // Se não tiver DATABASE_URL, mas tiver credenciais do Supabase, construir uma URL
+    if (!connectionString && process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+      // Usar URL do Supabase para construir a conexão PostgreSQL
+      const supabaseUrl = process.env.SUPABASE_URL || 'https://swrnbxuvewboetodewbi.supabase.co';
+      const projectId = supabaseUrl.split('https://')[1]?.split('.')[0] || 'swrnbxuvewboetodewbi';
+      
+      console.log('⚠️ DATABASE_URL não encontrada para teste inicial, tentando construir uma URL com credenciais do Supabase');
+      // Construindo uma URL PostgreSQL compatível com o formato que o Supabase espera
+      connectionString = `postgres://postgres:${process.env.SUPABASE_KEY}@db.${projectId}.supabase.co:5432/postgres`;
+      console.log('📝 URL de conexão construída para teste inicial (escondendo credenciais)');
+    }
+
+    // Se ainda não tivermos uma URL de conexão, iniciar sem testar
+    if (!connectionString) {
+      console.error('❌ Não foi possível obter uma URL de conexão com o banco de dados para teste inicial');
+      console.log('⚠️ Iniciando o servidor sem testar a conexão com o banco...');
+      app.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 Servidor rodando em http://localhost:${PORT} no modo produção (AVISO: Sem teste de conexão com DB)`);
+      });
+      return;
+    }
+    
     const testPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString,
       ssl: { rejectUnauthorized: false },
       connectionTimeoutMillis: 10000
     });
