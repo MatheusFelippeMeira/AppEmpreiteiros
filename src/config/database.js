@@ -96,7 +96,7 @@ const setupSqliteTables = async (sqliteDb) => {
       nome TEXT NOT NULL,
       email TEXT UNIQUE NOT NULL,
       senha TEXT NOT NULL,
-      role TEXT DEFAULT 'user',
+      role TEXT DEFAULT 'usuario',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`,
