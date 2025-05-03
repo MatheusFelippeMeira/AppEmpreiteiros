@@ -35,6 +35,72 @@ app.set('layout extractScripts', true);
 app.set('layout extractStyles', true);
 app.set('layout extractMetas', true);
 
+// Interceptar e corrigir o sistema de layout para compatibilidade
+app.use((req, res, next) => {
+  // Override do método render para compatibilidade com contentFor
+  const originalRender = res.render;
+  
+  res.render = function(view, options, callback) {
+    options = options || {};
+    
+    // Inicializar opções básicas se não existirem
+    options.body = options.body || '';
+    options.corpo = options.corpo || '';
+    
+    // Conteúdo será renderizado diretamente, sem usar expressEjsLayout
+    if (options._disableLayout === true) {
+      return originalRender.call(this, view, options, callback);
+    }
+    
+    // Capturar 'contentFor' no processamento de templates
+    // Isso intercepta a chamada contentFor e armazena o conteúdo
+    const originalContentFor = options.contentFor;
+    const contentSections = {};
+    
+    options.contentFor = function(name, content) {
+      if (content) {
+        contentSections[name] = content;
+      } else {
+        contentSections[name] = function() {
+          return '';
+        };
+      }
+      
+      if (originalContentFor) {
+        return originalContentFor.apply(this, arguments);
+      }
+    };
+    
+    // Interceptar o renderizado final
+    const originalCallback = callback;
+    const newCallback = function(err, html) {
+      if (err) {
+        if (originalCallback) {
+          return originalCallback(err, html);
+        }
+        return next(err);
+      }
+      
+      // Sincronizar todas as seções de conteúdo
+      if (contentSections.corpo && !options.body) {
+        options.body = contentSections.corpo;
+      }
+      if (contentSections.body && !options.corpo) {
+        options.corpo = contentSections.body;
+      }
+      
+      if (originalCallback) {
+        return originalCallback(null, html);
+      }
+    };
+    
+    // Chamar o render original com os novos callbacks e opções
+    return originalRender.call(this, view, options, newCallback);
+  };
+  
+  next();
+});
+
 // Configurar variável de conteúdo para compatibilidade
 app.use((req, res, next) => {
   const originalRender = res.render;
