@@ -22,8 +22,8 @@ router.post('/login', async (req, res) => {
   try {
     const { email, senha } = req.body;
     
-    // Buscar usuário pelo email
-    const user = await db.promiseGet('SELECT * FROM usuarios WHERE email = ?', [email]);
+    // Buscar usuário pelo email (corrigindo nome da tabela de usuarios para users)
+    const user = await db.promiseGet('SELECT * FROM users WHERE email = ?', [email]);
     
     if (!user) {
       return res.render('auth/login', { 
@@ -45,12 +45,17 @@ router.post('/login', async (req, res) => {
     }
     
     // Guardar usuário na sessão (exceto a senha)
+    // Corrigindo o campo perfil para role para corresponder ao esquema do Supabase
     req.session.user = {
       id: user.id,
       nome: user.nome,
       email: user.email,
-      perfil: user.perfil
+      perfil: user.role // Usando role do banco e mapeando para perfil na sessão
     };
+    
+    // Adicionar log para debug
+    console.log('Login bem-sucedido para:', email);
+    console.log('Sessão do usuário:', req.session.user);
     
     // Redirecionar para o dashboard
     res.redirect('/');
@@ -91,8 +96,8 @@ router.post('/registro', async (req, res) => {
       });
     }
     
-    // Verificar se o e-mail já está em uso
-    const usuarioExiste = await db.promiseGet('SELECT id FROM usuarios WHERE email = ?', [email]);
+    // Verificar se o e-mail já está em uso (corrigido para users)
+    const usuarioExiste = await db.promiseGet('SELECT id FROM users WHERE email = ?', [email]);
     
     if (usuarioExiste) {
       return res.render('auth/registro', { 
@@ -105,9 +110,9 @@ router.post('/registro', async (req, res) => {
     // Hash da senha
     const senhaCriptografada = await bcrypt.hash(senha, 10);
     
-    // Inserir novo usuário
+    // Inserir novo usuário (corrigido para users e role)
     const resultado = await db.promiseRun(
-      'INSERT INTO usuarios (nome, email, senha, perfil) VALUES (?, ?, ?, ?)',
+      'INSERT INTO users (nome, email, senha, role) VALUES (?, ?, ?, ?)',
       [nome, email, senhaCriptografada, 'usuario']
     );
     
@@ -116,8 +121,12 @@ router.post('/registro', async (req, res) => {
       id: resultado.lastID,
       nome,
       email,
-      perfil: 'usuario'
+      perfil: 'usuario' // Mantendo perfil na sessão para compatibilidade
     };
+    
+    // Adicionar log para debug
+    console.log('Registro bem-sucedido para:', email);
+    console.log('Sessão do usuário:', req.session.user);
     
     // Redirecionar para o dashboard
     res.redirect('/');
