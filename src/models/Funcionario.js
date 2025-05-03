@@ -5,6 +5,28 @@ class Funcionario {
     const sql = `SELECT * FROM funcionarios ORDER BY nome`;
     return db.promiseAll(sql, []);
   }
+  
+  // Método com suporte a paginação
+  static async getAllPaginated(page = 1, limit = 10) {
+    const offset = (page - 1) * limit;
+    const sql = `SELECT * FROM funcionarios ORDER BY nome LIMIT ? OFFSET ?`;
+    
+    // Obter total para cálculo de páginas
+    const countSql = `SELECT COUNT(*) as total FROM funcionarios`;
+    
+    const [rows, countResult] = await Promise.all([
+      db.promiseAll(sql, [limit, offset]),
+      db.promiseGet(countSql, [])
+    ]);
+    
+    return {
+      data: rows,
+      total: countResult.total,
+      page: page,
+      limit: limit,
+      totalPages: Math.ceil(countResult.total / limit)
+    };
+  }
 
   static async getById(id) {
     const sql = `SELECT * FROM funcionarios WHERE id = ?`;

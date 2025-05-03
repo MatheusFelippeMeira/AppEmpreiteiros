@@ -6,21 +6,15 @@
 </div>
 
 <%# Exibir mensagens flash (já incluídas no layout main.ejs, mas pode ser útil ter aqui também se necessário) %>
-<%# 
+<%/* 
+Este é um exemplo de como exibir mensagens flash:
 if (typeof success_msg !== 'undefined' && success_msg.length > 0) { 
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         <%= success_msg %>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
     </div>
 } 
-
-if (typeof error_msg !== 'undefined' && error_msg.length > 0) {
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <%= error_msg %>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
-    </div>
-}
-%>
+*/%>
 
 <div class="card shadow-sm">
     <div class="card-body">
@@ -55,16 +49,46 @@ if (typeof error_msg !== 'undefined' && error_msg.length > 0) {
                                     <a href="/funcionarios/<%= func.id %>/editar" class="btn btn-sm btn-outline-secondary" title="Editar">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <%# 
-                                      O botão de deletar iria aqui - exemplo:
-                                      <form action="/funcionarios/ID?_method=DELETE" method="POST">...</form>
-                                    %>
                                 </td>
                             </tr>
                         <% }); %>
                     </tbody>
                 </table>
             </div>
+            
+            <% if (typeof paginacao !== 'undefined' && paginacao.totalPages > 1) { %>
+                <!-- Paginação -->
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div>
+                        Mostrando <%= funcionarios.length %> de <%= paginacao.total %> funcionários
+                    </div>
+                    <nav aria-label="Navegação de páginas">
+                        <ul class="pagination">
+                            <% if (paginacao.page > 1) { %>
+                                <li class="page-item">
+                                    <a class="page-link" href="/funcionarios?page=<%= paginacao.page - 1 %>" aria-label="Anterior">
+                                        <span aria-hidden="true">&laquo;</span>
+                                    </a>
+                                </li>
+                            <% } %>
+                            
+                            <% for(let i = 1; i <= paginacao.totalPages; i++) { %>
+                                <li class="page-item <%= paginacao.page === i ? 'active' : '' %>">
+                                    <a class="page-link" href="/funcionarios?page=<%= i %>"><%= i %></a>
+                                </li>
+                            <% } %>
+                            
+                            <% if (paginacao.page < paginacao.totalPages) { %>
+                                <li class="page-item">
+                                    <a class="page-link" href="/funcionarios?page=<%= paginacao.page + 1 %>" aria-label="Próximo">
+                                        <span aria-hidden="true">&raquo;</span>
+                                    </a>
+                                </li>
+                            <% } %>
+                        </ul>
+                    </nav>
+                </div>
+            <% } %>
         <% } else { %>
             <div class="alert alert-info">Nenhum funcionário cadastrado ainda.</div>
         <% } %>

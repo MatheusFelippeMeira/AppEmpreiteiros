@@ -12,21 +12,31 @@ const isAuthenticated = (req, res, next) => {
   return res.redirect('/auth/login');
 };
 
-// Listar todos os funcionários
+// Listar todos os funcionários com paginação
 router.get('/', isAuthenticated, async (req, res) => {
   try {
-    const funcionarios = await Funcionario.getAll(); // Usar Model
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    
+    // Usar o novo método com paginação
+    const resultado = await Funcionario.getAllPaginated(page, limit);
     
     res.render('funcionarios/index', { 
       title: 'Funcionários', 
-      funcionarios, 
-      success_msg: req.flash('success_msg'), // Passar flash messages
+      funcionarios: resultado.data,
+      paginacao: {
+        page: resultado.page,
+        totalPages: resultado.totalPages,
+        total: resultado.total,
+        limit: resultado.limit
+      },
+      success_msg: req.flash('success_msg'),
       error_msg: req.flash('error_msg')
     });
   } catch (err) {
     console.error('Erro ao listar funcionários:', err);
     req.flash('error_msg', 'Não foi possível carregar a lista de funcionários.');
-    res.redirect('/dashboard'); // Redirecionar para dashboard em caso de erro grave
+    res.redirect('/dashboard');
   }
 });
 
@@ -154,6 +164,14 @@ router.post('/:id', isAuthenticated, funcionarioValidationRules(), async (req, r
 // Excluir funcionário
 router.post('/:id/excluir', isAuthenticated, async (req, res) => {
   try {
+    // Verificar se o funcionário tem trabalhos associados
+    const trabalhos = await Funcionario.getTrabalhos(req.params.id);
+    if (trabalhos && trabalhos.length > 0) {
+      req.flash('error_msg', 'Não é possível excluir um funcionário com trabalhos registrados. Remova os trabalhos primeiro.');
+      return res.redirect(`/funcionarios/${req.params.id}`);
+    }
+    
+    // Se não há trabalhos, pode excluir
     await Funcionario.delete(req.params.id);
     
     req.flash('success_msg', 'Funcionário excluído com sucesso!');

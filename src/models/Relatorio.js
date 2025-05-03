@@ -253,6 +253,175 @@ class Relatorio {
       };
     }
   }
+
+  // Método para formatação de dados para exportação CSV de lucratividade
+  static formatarDadosCSVLucratividade(projetos) {
+    // Header do CSV
+    let headers = [
+      'ID', 
+      'Nome do Projeto', 
+      'Tipo', 
+      'Cliente', 
+      'Localidade', 
+      'Data Início', 
+      'Data Fim',
+      'Receita (R$)', 
+      'Gastos Materiais (R$)', 
+      'Custo Mão de Obra (R$)', 
+      'Lucro Líquido (R$)', 
+      'Margem (%)'
+    ];
+    
+    // Formatar os dados para CSV
+    let rows = projetos.map(p => {
+      const lucroLiquido = p.receita - p.gastos_materiais - p.custo_mao_obra;
+      const margem = ((lucroLiquido / p.receita) * 100).toFixed(2);
+      
+      // Formatação de datas
+      const dataInicio = new Date(p.data_inicio).toLocaleDateString('pt-BR');
+      const dataFim = p.data_fim_real ? new Date(p.data_fim_real).toLocaleDateString('pt-BR') : '-';
+      
+      return [
+        p.id,
+        p.nome,
+        p.tipo,
+        p.cliente_nome || '-',
+        p.localidade,
+        dataInicio,
+        dataFim,
+        p.receita.toFixed(2),
+        p.gastos_materiais.toFixed(2),
+        p.custo_mao_obra.toFixed(2),
+        lucroLiquido.toFixed(2),
+        margem
+      ];
+    });
+    
+    // Adicionar totais no final
+    const totalReceita = projetos.reduce((sum, p) => sum + p.receita, 0);
+    const totalGastos = projetos.reduce((sum, p) => sum + p.gastos_materiais, 0);
+    const totalMaoObra = projetos.reduce((sum, p) => sum + p.custo_mao_obra, 0);
+    const totalLucro = totalReceita - totalGastos - totalMaoObra;
+    const margemMedia = ((totalLucro / totalReceita) * 100).toFixed(2);
+    
+    rows.push([
+      '',
+      'TOTAL',
+      '',
+      '',
+      '',
+      '',
+      '',
+      totalReceita.toFixed(2),
+      totalGastos.toFixed(2),
+      totalMaoObra.toFixed(2),
+      totalLucro.toFixed(2),
+      margemMedia
+    ]);
+    
+    return { headers, rows };
+  }
+
+  // Método para formatação de dados para exportação CSV de pagamentos
+  static formatarDadosCSVPagamentos(pagamentos) {
+    // Header do CSV
+    let headers = [
+      'Nome', 
+      'Função', 
+      'Total de Dias Trabalhados', 
+      'Total de Horas Extras', 
+      'Valor Diária (R$)',
+      'Valor H. Extra (R$)',
+      'Total Diárias (R$)',
+      'Total H. Extras (R$)',
+      'Total Empreitadas (R$)',
+      'Total Bruto (R$)', 
+      'Adiantamentos (R$)',
+      'Valor a Pagar (R$)'
+    ];
+    
+    // Formatar os dados para CSV
+    let rows = pagamentos.map(p => {
+      const totalDiarias = (p.total_dias || 0) * (p.valor_diaria || 0);
+      const totalHorasExtras = (p.total_horas_extras || 0) * (p.valor_hora_extra || 0);
+      const saldoAPagar = p.total_bruto - p.total_adiantamentos;
+      
+      return [
+        p.nome,
+        p.funcao || '-',
+        p.total_dias || 0,
+        p.total_horas_extras || 0,
+        p.valor_diaria ? p.valor_diaria.toFixed(2) : '0.00',
+        p.valor_hora_extra ? p.valor_hora_extra.toFixed(2) : '0.00',
+        totalDiarias.toFixed(2),
+        totalHorasExtras.toFixed(2),
+        (p.total_empreitadas || 0).toFixed(2),
+        p.total_bruto.toFixed(2),
+        p.total_adiantamentos.toFixed(2),
+        saldoAPagar.toFixed(2)
+      ];
+    });
+    
+    // Adicionar totais no final
+    if (pagamentos.length > 0) {
+      const totalBruto = pagamentos.reduce((sum, p) => sum + p.total_bruto, 0);
+      const totalAdiantamentos = pagamentos.reduce((sum, p) => sum + p.total_adiantamentos, 0);
+      const totalSaldo = totalBruto - totalAdiantamentos;
+      
+      rows.push([
+        'TOTAL',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        totalBruto.toFixed(2),
+        totalAdiantamentos.toFixed(2),
+        totalSaldo.toFixed(2)
+      ]);
+    }
+    
+    return { headers, rows };
+  }
+
+  // Formata dados para exportação CSV do relatório de custos por categoria
+  static formatarDadosCSVCustosPorCategoria(gastos) {
+    // Header do CSV
+    let headers = [
+      'Categoria', 
+      'Valor Total (R$)', 
+      'Quantidade de Registros',
+      'Percentual (%)'
+    ];
+    
+    // Calcular o valor total para percentuais
+    const valorTotal = gastos.reduce((sum, g) => sum + g.total_valor, 0);
+    
+    // Formatar os dados para CSV
+    let rows = gastos.map(g => {
+      const percentual = ((g.total_valor / valorTotal) * 100).toFixed(2);
+      
+      return [
+        g.categoria,
+        g.total_valor.toFixed(2),
+        g.total_registros,
+        percentual
+      ];
+    });
+    
+    // Adicionar total no final
+    rows.push([
+      'TOTAL',
+      valorTotal.toFixed(2),
+      gastos.reduce((sum, g) => sum + g.total_registros, 0),
+      '100.00'
+    ]);
+    
+    return { headers, rows };
+  }
 }
 
 module.exports = Relatorio;

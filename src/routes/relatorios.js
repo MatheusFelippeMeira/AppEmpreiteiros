@@ -6,6 +6,7 @@ const Funcionario = require('../models/Funcionario');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
+const { generateCSV } = require('../utils/csvUtils');
 
 // Middleware para verificar se usuário está autenticado
 const isAuthenticated = (req, res, next) => {
@@ -25,7 +26,7 @@ router.get('/', isAuthenticated, (req, res) => {
 
 // Relatório de lucratividade por projeto
 router.get('/lucratividade', isAuthenticated, async (req, res) => {
-  const { status, data_inicio, data_fim, cliente_id } = req.query;
+  const { status, data_inicio, data_fim, cliente_id, formato } = req.query;
   
   try {
     // Buscar todos os clientes para o filtro
@@ -52,6 +53,19 @@ router.get('/lucratividade', isAuthenticated, async (req, res) => {
     // Buscar dados com base nos filtros
     const projetos = await Relatorio.getLucratividadePorProjeto(filtros);
     
+    // Verificar se é para exportar em CSV
+    if (formato === 'csv' && projetos && projetos.length > 0) {
+      const { headers, rows } = Relatorio.formatarDadosCSVLucratividade(projetos);
+      const csvContent = generateCSV(headers, rows);
+      
+      // Configurar headers para download
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=lucratividade_${Date.now()}.csv`);
+      
+      // Enviar conteúdo CSV
+      return res.send(csvContent);
+    }
+    
     res.render('relatorios/lucratividade', {
       title: 'Relatório de Lucratividade',
       clientes,
@@ -69,7 +83,7 @@ router.get('/lucratividade', isAuthenticated, async (req, res) => {
 
 // Relatório de custos por categoria
 router.get('/custos', isAuthenticated, async (req, res) => {
-  const { projeto_id, data_inicio, data_fim } = req.query;
+  const { projeto_id, data_inicio, data_fim, formato } = req.query;
   
   // Filtros para a busca
   const filtros = {
@@ -91,6 +105,19 @@ router.get('/custos', isAuthenticated, async (req, res) => {
     // Buscar dados com base nos filtros
     const gastos = await Relatorio.getCustosPorCategoria(filtros);
     
+    // Verificar se é para exportar em CSV
+    if (formato === 'csv' && gastos && gastos.length > 0) {
+      const { headers, rows } = Relatorio.formatarDadosCSVCustosPorCategoria(gastos);
+      const csvContent = generateCSV(headers, rows);
+      
+      // Configurar headers para download
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=custos_${Date.now()}.csv`);
+      
+      // Enviar conteúdo CSV
+      return res.send(csvContent);
+    }
+    
     res.render('relatorios/custos', {
       title: 'Relatório de Custos por Categoria',
       gastos,
@@ -107,7 +134,7 @@ router.get('/custos', isAuthenticated, async (req, res) => {
 
 // Relatório de pagamento de funcionários
 router.get('/pagamentos', isAuthenticated, async (req, res) => {
-  const { funcionario_id, data_inicio, data_fim } = req.query;
+  const { funcionario_id, data_inicio, data_fim, formato } = req.query;
   
   try {
     // Buscar todos os funcionários para o filtro
@@ -132,6 +159,19 @@ router.get('/pagamentos', isAuthenticated, async (req, res) => {
     
     // Buscar dados com base nos filtros
     const pagamentos = await Relatorio.getPagamentoFuncionarios(filtros);
+    
+    // Verificar se é para exportar em CSV
+    if (formato === 'csv' && pagamentos && pagamentos.length > 0) {
+      const { headers, rows } = Relatorio.formatarDadosCSVPagamentos(pagamentos);
+      const csvContent = generateCSV(headers, rows);
+      
+      // Configurar headers para download
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=pagamentos_${Date.now()}.csv`);
+      
+      // Enviar conteúdo CSV
+      return res.send(csvContent);
+    }
     
     res.render('relatorios/pagamentos', {
       title: 'Relatório de Pagamentos',
