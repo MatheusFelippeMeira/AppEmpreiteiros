@@ -46,17 +46,18 @@ if (isDev) {
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "'unsafe-inline'"],
+        defaultSrc: ["'self'", "*", "data:"],
+        scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://code.jquery.com", "'unsafe-inline'", "'unsafe-eval'"],
         styleSrc: ["'self'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:"],
-        fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
-        connectSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "*"],
+        fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "data:"],
+        connectSrc: ["'self'", "*"],
+        objectSrc: ["'self'"]
       },
     },
     crossOriginEmbedderPolicy: false,
     crossOriginOpenerPolicy: false,
-    crossOriginResourcePolicy: { policy: "same-origin" },
+    crossOriginResourcePolicy: { policy: "cross-origin" },
     referrerPolicy: { policy: "no-referrer" },
   }));
   app.use(compression());
@@ -70,7 +71,8 @@ const sessionConfig = {
   saveUninitialized: true,
   cookie: {
     maxAge: 1000 * 60 * 60 * 24,
-    secure: !isDev,
+    secure: false, // Alterado para false para permitir HTTP e HTTPS
+    sameSite: 'lax' // Adicionado para melhorar compatibilidade com navegadores móveis
   }
 };
 app.use(session(sessionConfig));
@@ -112,14 +114,25 @@ app.get('/', (req, res) => {
   }
 });
 
+// Adicionar rota de health check
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 // Tratamento de erros simplificado
 app.use((req, res, next) => {
-  res.status(404).send('Página não encontrada');
+  res.status(404).render('error', {
+    title: 'Página não encontrada',
+    message: 'A página que você está procurando não existe.'
+  });
 });
 
 app.use((err, req, res, next) => {
   console.error('ERRO:', err);
-  res.status(500).send('Erro interno do servidor');
+  res.status(500).render('error', {
+    title: 'Erro interno',
+    message: 'Ocorreu um erro no servidor. Por favor, tente novamente mais tarde.'
+  });
 });
 
 // Inicialização do servidor
