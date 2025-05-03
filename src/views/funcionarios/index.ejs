@@ -6,18 +6,21 @@
 </div>
 
 <%# Exibir mensagens flash (já incluídas no layout main.ejs, mas pode ser útil ter aqui também se necessário) %>
-<% /* if (typeof success_msg !== 'undefined' && success_msg.length > 0) { %>
+<%# 
+if (typeof success_msg !== 'undefined' && success_msg.length > 0) { 
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         <%= success_msg %>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
     </div>
-<% } %>
-<% if (typeof error_msg !== 'undefined' && error_msg.length > 0) { %>
+} 
+
+if (typeof error_msg !== 'undefined' && error_msg.length > 0) {
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
         <%= error_msg %>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
     </div>
-<% } */ %>
+}
+%>
 
 <div class="card shadow-sm">
     <div class="card-body">
@@ -52,14 +55,10 @@
                                     <a href="/funcionarios/<%= func.id %>/editar" class="btn btn-sm btn-outline-secondary" title="Editar">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <%# Botão de deletar pode ser adicionado aqui com confirmação %>
-                                    <% /* 
-                                    <form action="/funcionarios/<%= func.id %>?_method=DELETE" method="POST" class="d-inline ms-1" onsubmit="return confirm('Tem certeza que deseja excluir este funcionário?');">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </form>
-                                    */ %>
+                                    <%# 
+                                      O botão de deletar iria aqui - exemplo:
+                                      <form action="/funcionarios/ID?_method=DELETE" method="POST">...</form>
+                                    %>
                                 </td>
                             </tr>
                         <% }); %>
