@@ -156,50 +156,96 @@ if (isDev || forceSqliteSession) {
 app.use(session(sessionConfig));
 app.use(flash());
 
-// Configuração de proteção CSRF melhorada com tratamento de erros
-const csrfOptions = {
-  cookie: isDev ? false : {
-    secure: true,
-    sameSite: 'lax',
-    httpOnly: true
+// Configuração simplificada de proteção CSRF para funcionar em todos os ambientes
+let csrfProtection;
+
+try {
+  // Tentar criar o middleware CSRF com configuração apropriada para o ambiente
+  if (isDev) {
+    // Em desenvolvimento, usa configuração simples
+    csrfProtection = csrf({
+      cookie: false, // Usar sessão em vez de cookies
+      ignoreMethods: ['HEAD', 'OPTIONS'] // Ignorar métodos que normalmente não precisam de proteção
+    });
+  } else {
+    // Em produção, usar configuração com cookie ou sessão dependendo da disponibilidade
+    if (process.env.DATABASE_URL) {
+      // Se temos banco de dados, preferir usar sessão
+      csrfProtection = csrf({
+        cookie: false,
+        ignoreMethods: ['HEAD', 'OPTIONS']
+      });
+    } else {
+      // Se não temos banco de dados, usar cookie signed (mais seguro) ou sessão como fallback
+      csrfProtection = csrf({
+        cookie: {
+          secure: true,
+          httpOnly: true,
+          sameSite: 'lax',
+          signed: false // Não é necessário assinar o cookie CSRF
+        },
+        ignoreMethods: ['HEAD', 'OPTIONS']
+      });
+    }
   }
-};
+  
+  console.log('✅ Proteção CSRF configurada com sucesso');
+} catch (error) {
+  console.error('❌ Erro ao configurar CSRF:', error.message);
+  // Criar um middleware de fallback que não bloqueia a aplicação
+  csrfProtection = (req, res, next) => {
+    res.locals.csrfToken = 'disabled-for-safety';
+    next();
+  };
+  console.warn('⚠️ AVISO: Proteção CSRF desativada devido a erro de configuração');
+}
 
 // Uso de CSRF com tratamento adequado de erros
 app.use((req, res, next) => {
-  // Ignorar CSRF em rotas específicas, como APIs ou webhooks (se necessário)
-  if (req.path === '/health' || req.path.startsWith('/api/')) {
+  // Ignorar CSRF em rotas específicas ou métodos HEAD/OPTIONS
+  if (req.path === '/health' || 
+      req.path.startsWith('/api/') || 
+      req.method === 'HEAD' || 
+      req.method === 'OPTIONS') {
     return next();
   }
   
-  csrf(csrfOptions)(req, res, (err) => {
-    if (err && err.code === 'EBADCSRFTOKEN') {
-      // Se ocorrer erro de CSRF, registrar e renderizar tela de erro específica
-      console.error('⚠️ Erro CSRF:', err.message);
-      console.error(`  Caminho: ${req.path}`);
-      console.error(`  Método: ${req.method}`);
-      console.error(`  IP: ${req.ip}`);
-      
-      // Enviar flash message e redirecionar para login em caso de erro CSRF
-      req.flash('error_msg', 'Sessão expirada ou inválida. Por favor, faça login novamente.');
-      
-      // Em caso de AJAX, retornar erro em JSON
-      if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
-        return res.status(403).json({ error: 'Sessão expirada ou inválida.' });
+  // Se tivermos um middleware CSRF válido, usá-lo
+  if (typeof csrfProtection === 'function') {
+    return csrfProtection(req, res, (err) => {
+      if (err && err.code === 'EBADCSRFTOKEN') {
+        // Se ocorrer erro de CSRF, registrar e renderizar tela de erro específica
+        console.error('⚠️ Erro de token CSRF inválido:', err.message);
+        console.error(`  Caminho: ${req.path}`);
+        console.error(`  Método: ${req.method}`);
+        
+        // Enviar flash message e redirecionar para login em caso de erro CSRF
+        req.flash('error_msg', 'Sessão expirada ou inválida. Por favor, faça login novamente.');
+        
+        // Em caso de AJAX, retornar erro em JSON
+        if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
+          return res.status(403).json({ error: 'Sessão expirada ou inválida.' });
+        }
+        
+        return res.redirect('/auth/login');
       }
-      
-      return res.redirect('/auth/login');
-    }
-    next(err);
-  });
+      next(err);
+    });
+  }
+  
+  // Fallback se algo deu errado com o CSRF
+  next();
 });
 
 // Middleware para disponibilizar variáveis globais para as views
 app.use((req, res, next) => {
   try {
     // Disponibiliza o token CSRF para todas as views se estiver disponível
-    if (req.csrfToken) {
+    if (req.csrfToken && typeof req.csrfToken === 'function') {
       res.locals.csrfToken = req.csrfToken();
+    } else if (!res.locals.csrfToken) {
+      // Se não temos um token disponível, usar um valor de fallback
+      res.locals.csrfToken = 'disabled-for-safety';
     }
     
     res.locals.user = req.session.user || null;
@@ -216,7 +262,7 @@ app.use((req, res, next) => {
     res.locals.success_msg = req.flash('success_msg');
     res.locals.error_msg = req.flash('error_msg');
     res.locals.title = 'App Empreiteiros';
-    res.locals.csrfToken = 'error'; // Valor de fallback para evitar quebrar os templates
+    res.locals.csrfToken = 'disabled-for-safety'; // Valor de fallback para evitar quebrar os templates
     next();
   }
 });
