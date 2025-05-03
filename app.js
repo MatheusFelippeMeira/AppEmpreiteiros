@@ -1,14 +1,13 @@
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
-const PgSession = require('connect-pg-simple')(session);
 const flash = require('connect-flash');
 const morgan = require('morgan');
 const helmet = require('helmet');
 const compression = require('compression');
-const { Pool } = require('pg');
 const ejsLayouts = require('express-ejs-layouts');
 const methodOverride = require('method-override'); // Importar method-override
+const { supabase, testConnection } = require('./src/config/supabase'); // Importar o cliente Supabase
 
 // Importação de rotas
 const authRoutes = require('./src/routes/auth');
@@ -71,6 +70,7 @@ if (isDev) {
 let sessionConfig;
 const sessionSecret = process.env.SESSION_SECRET;
 const forceSqliteSession = process.env.FORCE_SQLITE === 'true';
+const useSupabaseApi = process.env.USE_SUPABASE_API === 'true';
 
 // Definir um secret padrão para produção (não ideal, mas evita erros fatais)
 const defaultProductionSecret = 'app_empreiteiros_secret_production_' + new Date().getFullYear();
@@ -81,89 +81,30 @@ if (!isDev && !sessionSecret) {
   console.error('⚠️ RECOMENDAÇÃO: Configure a variável de ambiente SESSION_SECRET no seu servidor Render.');
 }
 
-if (forceSqliteSession) {
-  console.log('⚠️ AVISO: Sessão baseada em SQLite forçada por variável de ambiente FORCE_SQLITE=true');
-}
-
-// Função para configuração básica da sessão, sem armazenamento no banco de dados
-const getBasicSessionConfig = () => ({
-  secret: sessionSecret || (isDev ? 'app_empreiteiros_secret_dev' : defaultProductionSecret),
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    maxAge: 1000 * 60 * 60 * 24,
-    secure: !isDev,
-    httpOnly: true,
-    sameSite: !isDev ? 'lax' : false
-  }
-});
-
-// Em ambiente de desenvolvimento ou quando forçado SQLite
-if (isDev || forceSqliteSession) {
-  sessionConfig = getBasicSessionConfig();
-  console.log('Usando armazenamento de sessão em memória (ambiente de desenvolvimento ou FORCE_SQLITE=true)');
-} else {
-  // Em produção, tentar usar PgSession, mas com fallback
-  try {
-    // Tentar usar DATABASE_URL primeiro, depois tentar construir uma URL com as credenciais do Supabase
-    let connectionString = process.env.DATABASE_URL;
-    
-    // Se não tiver DATABASE_URL, mas tiver credenciais do Supabase, construir uma URL
-    if (!connectionString && process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
-      // Usar URL do Supabase para construir a conexão PostgreSQL
-      const supabaseUrl = process.env.SUPABASE_URL || 'https://swrnbxuvewboetodewbi.supabase.co';
-      const projectId = supabaseUrl.split('https://')[1]?.split('.')[0] || 'swrnbxuvewboetodewbi';
-      
-      console.log('⚠️ DATABASE_URL não encontrada, tentando construir uma URL com credenciais do Supabase');
-      // Construindo uma URL PostgreSQL compatível com o formato que o Supabase espera
-      connectionString = `postgres://postgres:${process.env.SUPABASE_KEY}@db.${projectId}.supabase.co:5432/postgres`;
-      console.log('📝 URL de conexão construída para sessão (escondendo credenciais)');
+// Em produção, usar sempre MemoryStore para evitar problemas de conexão
+if (isDev || forceSqliteSession || !isDev || useSupabaseApi) {
+  // Usar sempre MemoryStore para sessões em produção quando estamos usando a API do Supabase
+  sessionConfig = {
+    secret: sessionSecret || (isDev ? 'app_empreiteiros_secret_dev' : defaultProductionSecret),
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      maxAge: 1000 * 60 * 60 * 24,
+      secure: !isDev,
+      httpOnly: true,
+      sameSite: !isDev ? 'lax' : false
     }
-    
-    // Verificar se temos uma URL de conexão
-    if (!connectionString) {
-      throw new Error('Nenhuma URL de conexão disponível para sessão. Usando armazenamento em memória.');
+  };
+  
+  if (!isDev) {
+    console.log('🔒 Usando armazenamento de sessão em memória em produção com Supabase API');
+    if (!useSupabaseApi) {
+      console.warn('⚠️ AVISO: Considere definir USE_SUPABASE_API=true para otimizar o uso da API Supabase');
     }
-
-    const pool = new Pool({
-      connectionString,
-      ssl: { rejectUnauthorized: false },
-      // Adicionar configurações para melhorar a estabilidade da conexão
-      max: 10, // máximo de conexões no pool para a sessão
-      idleTimeoutMillis: 30000, // tempo máximo que uma conexão pode ficar inativa
-      connectionTimeoutMillis: 5000 // tempo limite menor para sessões
-    });
-
-    // Configuração com armazenamento PostgreSQL
-    sessionConfig = {
-      ...getBasicSessionConfig(),
-      store: new PgSession({
-        pool,
-        tableName: 'session',
-        createTableIfMissing: true,
-        errorLog: console.error // Adicionar log de erros explícito
-      }),
-    };
-
-    // Teste de conexão para sessão (assíncrono)
-    pool.query('SELECT NOW()')
-      .then(result => {
-        const timestamp = result.rows[0].now;
-        console.log(`✅ Banco de dados conectado com sucesso para sessão (${timestamp})`);
-      })
-      .catch(err => {
-        console.error('⚠️ Erro ao conectar ao banco para sessão:', err.message);
-        console.error('⚠️ Usando armazenamento de sessão em memória como fallback');
-        
-        // Em caso de erro de conexão, reverter para sessão em memória
-        sessionConfig = getBasicSessionConfig();
-      });
-  } catch (error) {
-    console.error('❌ Erro ao configurar PgSession:', error.message);
-    console.error('⚠️ Usando sessão em memória como fallback');
-    
-    // Usar configuração básica (memória) em caso de erro
-    sessionConfig = getBasicSessionConfig();
+    console.warn('⚠️ AVISO: Armazenamento de sessão em memória não é recomendado para produção a longo prazo.');
+    console.warn('   As sessões serão perdidas quando o servidor for reiniciado.');
+  } else {
+    console.log('Usando armazenamento de sessão em memória (ambiente de desenvolvimento)');
   }
 }
 
@@ -268,23 +209,16 @@ app.get('/health', (req, res) => {
   };
 
   if (!isDev) {
-    const healthCheckPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 5000
-    });
-
-    healthCheckPool.query('SELECT 1')
-      .then(() => {
-        healthInfo.database = 'connected';
+    // Usar o cliente Supabase para verificar a conexão
+    testConnection()
+      .then(connected => {
+        healthInfo.database = connected ? 'connected' : 'disconnected';
         res.status(200).json(healthInfo);
-        healthCheckPool.end();
       })
       .catch(err => {
         healthInfo.database = 'disconnected';
         healthInfo.databaseError = err.message;
         res.status(200).json(healthInfo);
-        healthCheckPool.end();
       });
   } else {
     res.status(200).json(healthInfo);
@@ -309,7 +243,10 @@ app.get('/', (req, res) => {
 });
 
 // Middleware de tratamento de erros
-app.use((req, res) => {
+app.use((req, res, next) => {
+  if (res.headersSent) {
+    return next();
+  }
   console.log(`404 | Rota não encontrada: ${req.method} ${req.originalUrl}`);
   res.status(404).render('error', {
     title: 'Página não encontrada',
@@ -318,6 +255,12 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
+  // Verificar se os headers já foram enviados
+  if (res.headersSent) {
+    console.error(`Erro após headers enviados: ${err.message}`);
+    return next(err);
+  }
+  
   console.error('==================== ERRO DO SERVIDOR ====================');
   console.error(`Timestamp: ${new Date().toISOString()}`);
   console.error(`Rota: ${req.method} ${req.originalUrl}`);
@@ -332,62 +275,45 @@ app.use((err, req, res, next) => {
   if (err.port) console.error(`Porta: ${err.port}`);
   console.error('=========================================================');
   
-  res.status(500).render('error', {
-    title: 'Erro no servidor',
-    message: isDev ? err.message : 'Ocorreu um erro no servidor. Nossa equipe foi notificada.'
-  });
+  try {
+    res.status(500).render('error', {
+      title: 'Erro no servidor',
+      message: isDev ? err.message : 'Ocorreu um erro no servidor. Nossa equipe foi notificada.'
+    });
+  } catch (renderError) {
+    // Fallback para resposta simples em caso de erro no rendering
+    console.error('Erro ao renderizar página de erro:', renderError.message);
+    if (!res.headersSent) {
+      res.status(500).send('Erro interno do servidor');
+    }
+  }
 });
 
 // Inicialização do servidor
 if (require.main === module) {
   if (!isDev) {
-    // Usar a mesma lógica para obter a URL de conexão que usamos para a sessão
-    let connectionString = process.env.DATABASE_URL;
+    // Usar o testConnection do cliente Supabase em vez de tentar conexão direta com PostgreSQL
+    console.log('⏳ Testando conexão com a API do Supabase antes de iniciar o servidor...');
     
-    // Se não tiver DATABASE_URL, mas tiver credenciais do Supabase, construir uma URL
-    if (!connectionString && process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
-      // Usar URL do Supabase para construir a conexão PostgreSQL
-      const supabaseUrl = process.env.SUPABASE_URL || 'https://swrnbxuvewboetodewbi.supabase.co';
-      const projectId = supabaseUrl.split('https://')[1]?.split('.')[0] || 'swrnbxuvewboetodewbi';
-      
-      console.log('⚠️ DATABASE_URL não encontrada para teste inicial, tentando construir uma URL com credenciais do Supabase');
-      // Construindo uma URL PostgreSQL compatível com o formato que o Supabase espera
-      connectionString = `postgres://postgres:${process.env.SUPABASE_KEY}@db.${projectId}.supabase.co:5432/postgres`;
-      console.log('📝 URL de conexão construída para teste inicial (escondendo credenciais)');
-    }
-
-    // Se ainda não tivermos uma URL de conexão, iniciar sem testar
-    if (!connectionString) {
-      console.error('❌ Não foi possível obter uma URL de conexão com o banco de dados para teste inicial');
-      console.log('⚠️ Iniciando o servidor sem testar a conexão com o banco...');
-      app.listen(PORT, '0.0.0.0', () => {
-        console.log(`🚀 Servidor rodando em http://localhost:${PORT} no modo produção (AVISO: Sem teste de conexão com DB)`);
-      });
-      return;
-    }
-    
-    const testPool = new Pool({
-      connectionString,
-      ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 10000
-    });
-
-    testPool.connect()
-      .then(client => {
-        console.log('✅ Conexão inicial com o banco de dados estabelecida com sucesso!');
-        client.release();
-        testPool.end();
-
+    testConnection()
+      .then(connected => {
+        if (connected) {
+          console.log('✅ Conexão inicial com Supabase API estabelecida com sucesso!');
+        } else {
+          console.warn('⚠️ Teste de conexão com Supabase API retornou status não conectado');
+        }
+        
+        // Iniciar o servidor de qualquer forma
         app.listen(PORT, '0.0.0.0', () => {
           console.log(`🚀 Servidor rodando em http://localhost:${PORT} no modo produção`);
         });
       })
       .catch(err => {
-        console.error('❌ Erro CRÍTICO na conexão inicial com o banco de dados:', err.message);
-        testPool.end();
-        console.log('⚠️ Tentando iniciar o servidor mesmo com falha na conexão inicial com o banco...');
+        console.error('❌ Erro ao testar conexão inicial com Supabase API:', err.message);
+        console.log('⚠️ Iniciando o servidor mesmo com falha no teste de conexão...');
+        
         app.listen(PORT, '0.0.0.0', () => {
-          console.log(`🚀 Servidor rodando em http://localhost:${PORT} no modo produção (AVISO: Falha na conexão inicial com DB)`);
+          console.log(`🚀 Servidor rodando em http://localhost:${PORT} no modo produção (AVISO: Falha no teste inicial de conexão)`);
         });
       });
   } else {
