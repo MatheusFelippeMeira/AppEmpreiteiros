@@ -1,4 +1,11 @@
 <%- include('../layouts/main', { hideNavbar: true, title: 'Login' }) %>
+<%- contentFor('body') %>
+
+<%
+// Configurações da página
+const pageTitle = 'Login';
+const hideNavbar = true;
+%>
 
 <div class="row justify-content-center">
     <div class="col-md-6">
@@ -23,8 +30,10 @@
                 </div>
 
                 <form id="loginForm" action="/auth/login" method="POST">
+                    <% if (typeof csrfToken !== 'undefined') { %>
                     <!-- Campo oculto para o token CSRF -->
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <% } %>
                     
                     <div class="mb-3">
                         <label for="email" class="form-label">E-mail:</label>
@@ -61,99 +70,15 @@
     </div>
 </div>
 
-<!-- Script para garantir redirecionamento no login -->
+<!-- Script para login simplificado -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const loginForm = document.getElementById('loginForm');
-    const errorAlert = document.getElementById('errorAlert');
-    const errorMessage = document.getElementById('errorMessage');
     
     if (loginForm) {
         loginForm.addEventListener('submit', function(event) {
-            event.preventDefault();
-            
-            // Desabilitar botão de envio para evitar duplo envio
-            const submitButton = loginForm.querySelector('button[type="submit"]');
-            submitButton.disabled = true;
-            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Entrando...';
-            
-            // Obter os dados do formulário
-            const formData = new FormData(loginForm);
-            const formObject = {};
-            formData.forEach((value, key) => {
-                formObject[key] = value;
-            });
-            
-            // Enviar a requisição via fetch API
-            fetch('/auth/login', {
-                method: 'POST',
-                body: JSON.stringify(formObject),
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json, text/html',
-                    'X-CSRF-Token': formObject._csrf
-                },
-                credentials: 'same-origin'
-            })
-            .then(response => {
-                // Verificar primeiro se a resposta é um redirecionamento
-                if (response.redirected) {
-                    window.location.href = response.url;
-                    return { redirected: true };
-                }
-                
-                // Tentar interpretar como JSON
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    return response.json();
-                } else {
-                    // Para HTML e outros formatos
-                    return response.text().then(text => ({
-                        html: true,
-                        content: text,
-                        status: response.status
-                    }));
-                }
-            })
-            .then(data => {
-                // Se já foi redirecionado, não fazer nada
-                if (data.redirected) return;
-                
-                if (data.html) {
-                    // Se recebemos HTML, substituir o conteúdo da página
-                    document.open();
-                    document.write(data.content);
-                    document.close();
-                    return;
-                }
-                
-                if (data.success && data.redirect) {
-                    // Sucesso com redirecionamento explícito
-                    window.location.href = data.redirect;
-                } else if (data.message) {
-                    // Restaurar botão
-                    submitButton.disabled = false;
-                    submitButton.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Entrar';
-                    
-                    // Exibir mensagem de erro
-                    errorMessage.textContent = data.message;
-                    errorAlert.style.display = 'block';
-                } else {
-                    // Redirecionamento genérico para dashboard em caso de sucesso sem indicação específica
-                    window.location.href = '/dashboard';
-                }
-            })
-            .catch(error => {
-                console.error('Erro ao fazer login:', error);
-                
-                // Restaurar botão
-                submitButton.disabled = false;
-                submitButton.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Entrar';
-                
-                // Exibir erro genérico
-                errorMessage.textContent = 'Erro ao fazer login. Tente novamente.';
-                errorAlert.style.display = 'block';
-            });
+            // Permitir envio normal do formulário sem validações complexas
+            // para simplificar o processo de login
         });
     }
 });
