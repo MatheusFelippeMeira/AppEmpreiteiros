@@ -9,7 +9,7 @@ const path = require('path');
 
 // Middleware para verificar se usuário está autenticado
 const isAuthenticated = (req, res, next) => {
-  if (req.session.userId) {
+  if (req.session.user) {
     next();
   } else {
     res.redirect('/auth/login');
@@ -27,12 +27,9 @@ router.get('/', isAuthenticated, (req, res) => {
 router.get('/lucratividade', isAuthenticated, async (req, res) => {
   const { status, data_inicio, data_fim, cliente_id } = req.query;
   
-  // Buscar todos os clientes para o filtro
-  Cliente.getAll((err, clientes) => {
-    if (err) {
-      console.error('Erro ao buscar clientes:', err);
-      clientes = [];
-    }
+  try {
+    // Buscar todos os clientes para o filtro
+    const clientes = await Cliente.getAll();
     
     // Filtros para a busca
     const filtros = {
@@ -53,27 +50,25 @@ router.get('/lucratividade', isAuthenticated, async (req, res) => {
     }
     
     // Buscar dados com base nos filtros
-    Relatorio.getLucratividadePorProjeto(filtros, (err, projetos) => {
-      if (err) {
-        console.error('Erro ao buscar dados de lucratividade:', err);
-        return res.status(500).render('error', { 
-          title: 'Erro', 
-          message: 'Erro ao gerar relatório de lucratividade'
-        });
-      }
-      
-      res.render('relatorios/lucratividade', {
-        title: 'Relatório de Lucratividade',
-        clientes,
-        projetos,
-        filtros
-      });
+    const projetos = await Relatorio.getLucratividadePorProjeto(filtros);
+    
+    res.render('relatorios/lucratividade', {
+      title: 'Relatório de Lucratividade',
+      clientes,
+      projetos,
+      filtros
     });
-  });
+  } catch (err) {
+    console.error('Erro ao buscar dados de lucratividade:', err);
+    return res.status(500).render('error', { 
+      title: 'Erro', 
+      message: 'Erro ao gerar relatório de lucratividade'
+    });
+  }
 });
 
 // Relatório de custos por categoria
-router.get('/custos', isAuthenticated, (req, res) => {
+router.get('/custos', isAuthenticated, async (req, res) => {
   const { projeto_id, data_inicio, data_fim } = req.query;
   
   // Filtros para a busca
@@ -92,34 +87,31 @@ router.get('/custos', isAuthenticated, (req, res) => {
     });
   }
   
-  // Buscar dados com base nos filtros
-  Relatorio.getCustosPorCategoria(filtros, (err, gastos) => {
-    if (err) {
-      console.error('Erro ao buscar dados de custos:', err);
-      return res.status(500).render('error', { 
-        title: 'Erro', 
-        message: 'Erro ao gerar relatório de custos'
-      });
-    }
+  try {
+    // Buscar dados com base nos filtros
+    const gastos = await Relatorio.getCustosPorCategoria(filtros);
     
     res.render('relatorios/custos', {
       title: 'Relatório de Custos por Categoria',
       gastos,
       filtros
     });
-  });
+  } catch (err) {
+    console.error('Erro ao buscar dados de custos:', err);
+    return res.status(500).render('error', { 
+      title: 'Erro', 
+      message: 'Erro ao gerar relatório de custos'
+    });
+  }
 });
 
 // Relatório de pagamento de funcionários
-router.get('/pagamentos', isAuthenticated, (req, res) => {
+router.get('/pagamentos', isAuthenticated, async (req, res) => {
   const { funcionario_id, data_inicio, data_fim } = req.query;
   
-  // Buscar todos os funcionários para o filtro
-  Funcionario.getAll((err, funcionarios) => {
-    if (err) {
-      console.error('Erro ao buscar funcionários:', err);
-      funcionarios = [];
-    }
+  try {
+    // Buscar todos os funcionários para o filtro
+    const funcionarios = await Funcionario.getAll();
     
     // Filtros para a busca
     const filtros = {
@@ -139,32 +131,31 @@ router.get('/pagamentos', isAuthenticated, (req, res) => {
     }
     
     // Buscar dados com base nos filtros
-    Relatorio.getPagamentoFuncionarios(filtros, (err, pagamentos) => {
-      if (err) {
-        console.error('Erro ao buscar dados de pagamentos:', err);
-        return res.status(500).render('error', { 
-          title: 'Erro', 
-          message: 'Erro ao gerar relatório de pagamentos'
-        });
-      }
-      
-      res.render('relatorios/pagamentos', {
-        title: 'Relatório de Pagamentos',
-        funcionarios,
-        pagamentos,
-        filtros
-      });
+    const pagamentos = await Relatorio.getPagamentoFuncionarios(filtros);
+    
+    res.render('relatorios/pagamentos', {
+      title: 'Relatório de Pagamentos',
+      funcionarios,
+      pagamentos,
+      filtros
     });
-  });
+  } catch (err) {
+    console.error('Erro ao buscar dados de pagamentos:', err);
+    return res.status(500).render('error', { 
+      title: 'Erro', 
+      message: 'Erro ao gerar relatório de pagamentos'
+    });
+  }
 });
 
 // Relatório detalhado de um projeto específico
-router.get('/projeto/:id', isAuthenticated, (req, res) => {
+router.get('/projeto/:id', isAuthenticated, async (req, res) => {
   const id = req.params.id;
   
-  Relatorio.getResumoProjeto(id, (err, projeto) => {
-    if (err || !projeto) {
-      console.error('Erro ao buscar resumo do projeto:', err);
+  try {
+    const projeto = await Relatorio.getResumoProjeto(id);
+    
+    if (!projeto) {
       return res.status(404).render('error', { 
         title: 'Erro', 
         message: 'Projeto não encontrado ou erro ao gerar relatório'
@@ -175,16 +166,23 @@ router.get('/projeto/:id', isAuthenticated, (req, res) => {
       title: `Relatório - ${projeto.nome}`,
       projeto
     });
-  });
+  } catch (err) {
+    console.error('Erro ao buscar resumo do projeto:', err);
+    return res.status(404).render('error', { 
+      title: 'Erro', 
+      message: 'Projeto não encontrado ou erro ao gerar relatório'
+    });
+  }
 });
 
 // Gerar PDF de um projeto
-router.get('/projeto/:id/pdf', isAuthenticated, (req, res) => {
+router.get('/projeto/:id/pdf', isAuthenticated, async (req, res) => {
   const id = req.params.id;
   
-  Relatorio.getResumoProjeto(id, (err, projeto) => {
-    if (err || !projeto) {
-      console.error('Erro ao buscar resumo do projeto:', err);
+  try {
+    const projeto = await Relatorio.getResumoProjeto(id);
+    
+    if (!projeto) {
       return res.status(404).render('error', { 
         title: 'Erro', 
         message: 'Projeto não encontrado ou erro ao gerar relatório'
@@ -306,7 +304,13 @@ router.get('/projeto/:id/pdf', isAuthenticated, (req, res) => {
         projetoNome: projeto.nome
       });
     });
-  });
+  } catch (err) {
+    console.error('Erro ao gerar PDF do projeto:', err);
+    return res.status(500).render('error', { 
+      title: 'Erro', 
+      message: 'Erro ao gerar PDF do relatório'
+    });
+  }
 });
 
 module.exports = router;

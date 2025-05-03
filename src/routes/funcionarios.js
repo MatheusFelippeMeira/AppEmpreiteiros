@@ -26,7 +26,7 @@ router.get('/', isAuthenticated, async (req, res) => {
   } catch (err) {
     console.error('Erro ao listar funcionários:', err);
     req.flash('error_msg', 'Não foi possível carregar a lista de funcionários.');
-    res.redirect('/'); // Redirecionar para dashboard em caso de erro grave
+    res.redirect('/dashboard'); // Redirecionar para dashboard em caso de erro grave
   }
 });
 
@@ -46,76 +46,58 @@ const funcionarioValidationRules = () => {
     body('nome').notEmpty().withMessage('Nome é obrigatório').trim().escape(),
     body('contato').optional({ checkFalsy: true }).trim().escape(),
     body('funcao').optional({ checkFalsy: true }).trim().escape(),
-    body('valor_diaria').isFloat({ gt: 0 }).withMessage('Valor da diária deve ser um número positivo').toFloat(),
-    body('valor_hora_extra').optional({ checkFalsy: true }).isFloat({ gt: 0 }).withMessage('Valor da hora extra deve ser um número positivo').toFloat(),
-    body('valor_empreitada').optional({ checkFalsy: true }).isFloat({ gt: 0 }).withMessage('Valor da empreitada deve ser um número positivo').toFloat(),
-    body('observacoes').optional({ checkFalsy: true }).trim().escape(),
-    body('status').optional().isIn(['ativo', 'inativo']).withMessage('Status inválido')
+    body('valor_diaria').isNumeric().withMessage('Valor da diária deve ser um número').toFloat(),
+    body('valor_hora_extra').isNumeric().withMessage('Valor da hora extra deve ser um número').toFloat()
   ];
 };
 
-// Cadastrar novo funcionário
-router.post('/', 
-  isAuthenticated, 
-  funcionarioValidationRules(), // Aplicar validação
-  async (req, res) => {
+// Criar novo funcionário
+router.post('/', isAuthenticated, funcionarioValidationRules(), async (req, res) => {
+  try {
     const errors = validationResult(req);
-    const funcionarioData = req.body;
-
+    
     if (!errors.isEmpty()) {
-      return res.status(400).render('funcionarios/form', {
+      return res.render('funcionarios/form', {
         title: 'Novo Funcionário',
-        funcionario: funcionarioData, // Manter dados no form
+        funcionario: req.body,
         errors: errors.array(),
         isNew: true
       });
     }
-
-    try {
-      await Funcionario.create(funcionarioData); // Usar Model
-      req.flash('success_msg', `Funcionário ${funcionarioData.nome} cadastrado com sucesso!`);
-      res.redirect('/funcionarios');
-    } catch (err) {
-      console.error('Erro ao cadastrar funcionário:', err);
-      res.status(500).render('funcionarios/form', { // Re-renderizar form com erro
-        title: 'Novo Funcionário',
-        funcionario: funcionarioData,
-        errors: [{ msg: 'Erro interno ao salvar o funcionário. Tente novamente.' }],
-        isNew: true
-      });
-    }
+    
+    // Se não há erros, criar funcionário
+    await Funcionario.create(req.body);
+    
+    req.flash('success_msg', 'Funcionário cadastrado com sucesso!');
+    res.redirect('/funcionarios');
+  } catch (err) {
+    console.error('Erro ao criar funcionário:', err);
+    req.flash('error_msg', 'Erro ao criar funcionário.');
+    res.redirect('/funcionarios');
+  }
 });
 
-// Exibir detalhes do funcionário
+// Ver detalhes de um funcionário
 router.get('/:id', isAuthenticated, async (req, res) => {
   try {
-    const id = req.params.id;
-    
-    // Buscar dados usando o Model em paralelo
-    const [funcionario, trabalhos, adiantamentos, totais] = await Promise.all([
-      Funcionario.getById(id),
-      Funcionario.getTrabalhos(id),
-      Funcionario.getAdiantamentos(id),
-      Funcionario.calcularTotais(id) // Usar o novo método para calcular totais
-    ]);
+    const funcionario = await Funcionario.getById(req.params.id);
     
     if (!funcionario) {
       req.flash('error_msg', 'Funcionário não encontrado.');
       return res.redirect('/funcionarios');
     }
     
+    // Obter trabalhos do funcionário
+    const trabalhos = await Funcionario.getTrabalhos(req.params.id);
+    
     res.render('funcionarios/detalhes', {
-      title: `Funcionário: ${funcionario.nome}`,
+      title: funcionario.nome,
       funcionario,
-      trabalhos,
-      adiantamentos,
-      totais,
-      success_msg: req.flash('success_msg'),
-      error_msg: req.flash('error_msg')
+      trabalhos
     });
   } catch (err) {
-    console.error('Erro ao exibir detalhes do funcionário:', err);
-    req.flash('error_msg', 'Não foi possível carregar os detalhes do funcionário.');
+    console.error('Erro ao buscar detalhes do funcionário:', err);
+    req.flash('error_msg', 'Erro ao buscar detalhes do funcionário.');
     res.redirect('/funcionarios');
   }
 });
@@ -123,103 +105,64 @@ router.get('/:id', isAuthenticated, async (req, res) => {
 // Formulário para editar funcionário
 router.get('/:id/editar', isAuthenticated, async (req, res) => {
   try {
-    const id = req.params.id;
-    const funcionario = await Funcionario.getById(id); // Usar Model
+    const funcionario = await Funcionario.getById(req.params.id);
     
     if (!funcionario) {
       req.flash('error_msg', 'Funcionário não encontrado.');
       return res.redirect('/funcionarios');
     }
     
-    res.render('funcionarios/form', { 
-      title: `Editar: ${funcionario.nome}`,
+    res.render('funcionarios/form', {
+      title: 'Editar Funcionário',
       funcionario,
       errors: [],
       isNew: false
     });
   } catch (err) {
-    console.error('Erro ao carregar formulário de edição:', err);
-    req.flash('error_msg', 'Não foi possível carregar o formulário de edição.');
-    res.redirect(`/funcionarios/${req.params.id}`);
+    console.error('Erro ao buscar funcionário para edição:', err);
+    req.flash('error_msg', 'Erro ao buscar funcionário para edição.');
+    res.redirect('/funcionarios');
   }
 });
 
 // Atualizar funcionário
-router.put('/:id', 
-  isAuthenticated, 
-  funcionarioValidationRules(), // Aplicar validação
-  async (req, res) => {
-    const id = req.params.id;
+router.post('/:id', isAuthenticated, funcionarioValidationRules(), async (req, res) => {
+  try {
     const errors = validationResult(req);
-    const funcionarioData = req.body;
-
+    
     if (!errors.isEmpty()) {
-      // Adiciona o ID aos dados para re-renderizar o form de edição corretamente
-      funcionarioData.id = id; 
-      return res.status(400).render('funcionarios/form', {
-        title: `Editar: ${funcionarioData.nome || 'Funcionário'}`,
-        funcionario: funcionarioData,
+      return res.render('funcionarios/form', {
+        title: 'Editar Funcionário',
+        funcionario: { ...req.body, id: req.params.id },
         errors: errors.array(),
         isNew: false
       });
     }
-
-    try {
-      const result = await Funcionario.update(id, funcionarioData); // Usar Model
-      
-      if (result.changes === 0 && result.rowCount === 0) { // Verificar se algo foi atualizado (rowCount para pg)
-        req.flash('error_msg', 'Funcionário não encontrado ou nenhum dado alterado.');
-      } else {
-        req.flash('success_msg', `Funcionário ${funcionarioData.nome} atualizado com sucesso!`);
-      }
-      res.redirect(`/funcionarios/${id}`);
-    } catch (err) {
-      console.error('Erro ao atualizar funcionário:', err);
-      funcionarioData.id = id;
-      res.status(500).render('funcionarios/form', { // Re-renderizar form com erro
-        title: `Editar: ${funcionarioData.nome || 'Funcionário'}`,
-        funcionario: funcionarioData,
-        errors: [{ msg: 'Erro interno ao atualizar o funcionário. Tente novamente.' }],
-        isNew: false
-      });
-    }
+    
+    // Se não há erros, atualizar funcionário
+    await Funcionario.update(req.params.id, req.body);
+    
+    req.flash('success_msg', 'Funcionário atualizado com sucesso!');
+    res.redirect('/funcionarios');
+  } catch (err) {
+    console.error('Erro ao atualizar funcionário:', err);
+    req.flash('error_msg', 'Erro ao atualizar funcionário.');
+    res.redirect('/funcionarios');
+  }
 });
 
-// Validação para adiantamento
-const adiantamentoValidationRules = () => {
-  return [
-    body('valor').isFloat({ gt: 0 }).withMessage('Valor do adiantamento deve ser um número positivo').toFloat(),
-    body('data').isISO8601().toDate().withMessage('Data inválida'),
-    body('descricao').optional({ checkFalsy: true }).trim().escape()
-  ];
-};
-
-// Rota para registrar novo adiantamento
-router.post('/:id/adiantamento', 
-  isAuthenticated, 
-  adiantamentoValidationRules(), // Aplicar validação
-  async (req, res) => {
-    const funcionario_id = req.params.id;
-    const errors = validationResult(req);
-    const adiantamentoData = { ...req.body, funcionario_id };
-
-    if (!errors.isEmpty()) {
-      // Se a validação falhar, redirecionar de volta com erro
-      // Idealmente, re-renderizaria a página de detalhes com o erro no modal/form
-      // Mas para simplificar, usamos flash message
-      req.flash('error_msg', errors.array().map(e => e.msg).join(', '));
-      return res.redirect(`/funcionarios/${funcionario_id}`);
-    }
-
-    try {
-      await Funcionario.registrarAdiantamento(adiantamentoData); // Usar Model
-      req.flash('success_msg', `Adiantamento registrado com sucesso!`);
-      res.redirect(`/funcionarios/${funcionario_id}`);
-    } catch (err) {
-      console.error('Erro ao registrar adiantamento:', err);
-      req.flash('error_msg', 'Não foi possível registrar o adiantamento.');
-      res.redirect(`/funcionarios/${funcionario_id}`);
-    }
+// Excluir funcionário
+router.post('/:id/excluir', isAuthenticated, async (req, res) => {
+  try {
+    await Funcionario.delete(req.params.id);
+    
+    req.flash('success_msg', 'Funcionário excluído com sucesso!');
+    res.redirect('/funcionarios');
+  } catch (err) {
+    console.error('Erro ao excluir funcionário:', err);
+    req.flash('error_msg', 'Erro ao excluir funcionário. Verifique se não há trabalhos registrados para este funcionário.');
+    res.redirect('/funcionarios');
+  }
 });
 
 module.exports = router;
