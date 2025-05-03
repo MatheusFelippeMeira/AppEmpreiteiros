@@ -33,9 +33,17 @@ router.post('/login', async (req, res) => {
   try {
     const { email, senha } = req.body;
     console.log('Tentativa de login para:', email);
+    console.log('Dados recebidos no formulário:', { email, senha: senha ? '******' : 'vazio' });
+    
+    // Depuração da requisição
+    console.log('Headers da requisição:', req.headers['content-type']);
+    console.log('Corpo da requisição:', req.body);
     
     // Buscar usuário pelo email (corrigindo nome da tabela de usuarios para users)
+    console.log('Buscando usuário no banco de dados...');
     const user = await db.promiseGet('SELECT * FROM users WHERE email = ?', [email]);
+    
+    console.log('Resultado da busca:', user ? 'Usuário encontrado' : 'Usuário NÃO encontrado');
     
     if (!user) {
       console.log('Usuário não encontrado:', email);
@@ -53,7 +61,12 @@ router.post('/login', async (req, res) => {
     }
     
     // Verificar senha
+    console.log('Verificando senha...');
+    console.log('Hash armazenado:', user.senha);
+    console.log('Senha fornecida (mascarada):', senha ? '******' : 'vazio');
+    
     const senhaValida = await bcrypt.compare(senha, user.senha);
+    console.log('Resultado da validação de senha:', senhaValida ? 'VÁLIDA ✓' : 'INVÁLIDA ✗');
     
     if (!senhaValida) {
       console.log('Senha inválida para usuário:', email);
@@ -79,14 +92,18 @@ router.post('/login', async (req, res) => {
     };
     
     // Definir token JWT no cookie e na sessão
+    console.log('Criando token JWT e cookie de autenticação...');
     authUtils.setAuthCookie(res, req, userSession);
     
     // Adicionar log para debug
     console.log('Login bem-sucedido para:', email);
+    console.log('Sessão do usuário:', req.session.user);
+    console.log('Cookie authToken definido:', res.getHeader('set-cookie'));
     
     // Responder de acordo com o tipo de requisição
     if (req.xhr || req.headers.accept?.includes('application/json')) {
       // Para requisições AJAX
+      console.log('Respondendo como JSON');
       res.json({
         success: true,
         message: 'Login bem-sucedido',
@@ -94,6 +111,7 @@ router.post('/login', async (req, res) => {
       });
     } else {
       // Para submissões de formulário tradicionais
+      console.log('Redirecionando para o dashboard');
       res.redirect('/dashboard');
     }
     
