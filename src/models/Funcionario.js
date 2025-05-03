@@ -1,84 +1,108 @@
 const db = require('../config/database');
 
 class Funcionario {
-  static getAll(callback) {
+  static async getAll() {
     const sql = `SELECT * FROM funcionarios ORDER BY nome`;
-    db.all(sql, [], callback);
+    return db.promiseAll(sql, []);
   }
 
-  static getById(id, callback) {
+  static async getById(id) {
     const sql = `SELECT * FROM funcionarios WHERE id = ?`;
-    db.get(sql, [id], callback);
+    return db.promiseGet(sql, [id]);
   }
 
-  static create(funcionario, callback) {
-    const { nome, funcao, valor_diaria, valor_hora_extra, valor_empreitada } = funcionario;
-    const sql = `INSERT INTO funcionarios (nome, funcao, valor_diaria, valor_hora_extra, valor_empreitada)
-                VALUES (?, ?, ?, ?, ?)`;
+  static async create(funcionario) {
+    const { nome, contato, funcao, valor_diaria, valor_hora_extra, valor_empreitada, observacoes } = funcionario;
+    const sql = `INSERT INTO funcionarios 
+                (nome, contato, funcao, valor_diaria, valor_hora_extra, valor_empreitada, observacoes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)`;
     
-    db.run(sql, [nome, funcao, valor_diaria, valor_hora_extra, valor_empreitada], function(err) {
-      callback(err, this.lastID);
-    });
+    return db.promiseRun(sql, [nome, contato, funcao, valor_diaria, valor_hora_extra, valor_empreitada, observacoes]);
   }
 
-  static update(id, funcionario, callback) {
-    const { nome, funcao, valor_diaria, valor_hora_extra, valor_empreitada } = funcionario;
+  static async update(id, funcionario) {
+    const { nome, contato, funcao, valor_diaria, valor_hora_extra, valor_empreitada, status, observacoes } = funcionario;
     const sql = `UPDATE funcionarios SET 
                 nome = ?, 
+                contato = ?, 
                 funcao = ?, 
                 valor_diaria = ?, 
                 valor_hora_extra = ?, 
-                valor_empreitada = ?,
+                valor_empreitada = ?, 
+                status = ?, 
+                observacoes = ?, 
                 data_atualizacao = CURRENT_TIMESTAMP
                 WHERE id = ?`;
     
-    db.run(sql, [nome, funcao, valor_diaria, valor_hora_extra, valor_empreitada, id], callback);
+    return db.promiseRun(sql, [nome, contato, funcao, valor_diaria, valor_hora_extra, valor_empreitada, status, observacoes, id]);
   }
 
-  static delete(id, callback) {
+  static async delete(id) {
     const sql = `DELETE FROM funcionarios WHERE id = ?`;
-    db.run(sql, [id], callback);
+    return db.promiseRun(sql, [id]);
   }
 
   // Métodos específicos para funcionários
-  static getTrabalhos(id, callback) {
+  static async getTrabalhos(id) {
     const sql = `SELECT t.*, p.nome as projeto_nome 
                 FROM trabalhos t 
                 JOIN projetos p ON t.projeto_id = p.id
                 WHERE t.funcionario_id = ?
                 ORDER BY t.data DESC`;
     
-    db.all(sql, [id], callback);
+    return db.promiseAll(sql, [id]);
   }
 
-  static getAdiantamentos(id, callback) {
+  static async getAdiantamentos(id) {
     const sql = `SELECT * FROM adiantamentos WHERE funcionario_id = ? ORDER BY data DESC`;
-    db.all(sql, [id], callback);
+    return db.promiseAll(sql, [id]);
   }
 
-  static registrarDiasTrabalhados(dados, callback) {
+  static async registrarDiasTrabalhados(dados) {
     const { funcionario_id, projeto_id, data, dias_trabalhados, horas_extras, empreitada, valor_empreitada } = dados;
     const sql = `INSERT INTO trabalhos 
                 (funcionario_id, projeto_id, data, dias_trabalhados, horas_extras, empreitada, valor_empreitada)
                 VALUES (?, ?, ?, ?, ?, ?, ?)`;
     
-    db.run(sql, [funcionario_id, projeto_id, data, dias_trabalhados, horas_extras, empreitada ? 1 : 0, valor_empreitada], function(err) {
-      callback(err, this.lastID);
-    });
+    return db.promiseRun(sql, [funcionario_id, projeto_id, data, dias_trabalhados, horas_extras, empreitada ? 1 : 0, valor_empreitada]);
   }
 
-  static registrarAdiantamento(dados, callback) {
+  static async registrarAdiantamento(dados) {
     const { funcionario_id, valor, data, descricao } = dados;
     const sql = `INSERT INTO adiantamentos 
                 (funcionario_id, valor, data, descricao)
                 VALUES (?, ?, ?, ?)`;
     
-    db.run(sql, [funcionario_id, valor, data, descricao], function(err) {
-      callback(err, this.lastID);
-    });
+    return db.promiseRun(sql, [funcionario_id, valor, data, descricao]);
   }
 
-  static calcularPagamentoPeriodo(id, dataInicio, dataFim, callback) {
+  static async calcularTotais(id) {
+    const funcionario = await this.getById(id);
+    const trabalhos = await this.getTrabalhos(id);
+    const adiantamentos = await this.getAdiantamentos(id);
+    
+    // Cálculos
+    let totalGanho = 0;
+    let totalExtras = 0;
+    
+    trabalhos.forEach(t => {
+      if (!t.empreitada) {
+        totalGanho += (t.dias_trabalhados || 0) * (funcionario.valor_diaria || 0);
+        totalExtras += (t.horas_extras || 0) * (funcionario.valor_hora_extra || 0);
+      }
+    });
+    
+    const totalAdiantamentos = adiantamentos.reduce((sum, ad) => sum + (ad.valor || 0), 0);
+    
+    return {
+      total_ganho: totalGanho,
+      total_extras: totalExtras,
+      total_adiantamentos: totalAdiantamentos,
+      saldo_atual: totalGanho + totalExtras - totalAdiantamentos
+    };
+  }
+
+  static async calcularPagamentoPeriodo(id, dataInicio, dataFim) {
     const sql = `SELECT 
                   f.nome, f.funcao, f.valor_diaria, f.valor_hora_extra,
                   SUM(t.dias_trabalhados) as total_dias,
@@ -91,7 +115,7 @@ class Funcionario {
                 WHERE f.id = ?
                 GROUP BY f.id`;
     
-    db.get(sql, [id, dataInicio, dataFim, dataInicio, dataFim, id], callback);
+    return db.promiseGet(sql, [id, dataInicio, dataFim, dataInicio, dataFim, id]);
   }
 }
 

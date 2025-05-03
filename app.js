@@ -8,6 +8,8 @@ const helmet = require('helmet');
 const compression = require('compression');
 const { Pool } = require('pg');
 const ejsLayouts = require('express-ejs-layouts');
+const methodOverride = require('method-override'); // Importar method-override
+const csrf = require('csurf'); // Importar proteção CSRF
 
 // Importação de rotas
 const authRoutes = require('./src/routes/auth');
@@ -32,70 +34,97 @@ app.set('layout', 'layouts/main');
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'src/public')));
+app.use(methodOverride('_method')); // Usar method-override
 
 // Segurança e otimização
 if (isDev) {
   app.use(morgan('dev'));
 } else {
-  app.use(helmet());
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "'unsafe-inline'"],
+        styleSrc: ["'self'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:"],
+        fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
+        connectSrc: ["'self'"],
+        frameSrc: ["'none'"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
+    crossOriginResourcePolicy: { policy: "same-origin" },
+    referrerPolicy: { policy: "no-referrer" },
+    strictTransportSecurity: {
+      maxAge: 15552000,
+      includeSubDomains: true,
+      preload: true
+    },
+  }));
   app.use(compression());
   app.use(morgan('combined'));
 }
 
 // Configuração de sessão
 let sessionConfig;
+const sessionSecret = process.env.SESSION_SECRET;
+
+if (!isDev && !sessionSecret) {
+  console.error('❌ ERRO CRÍTICO: SESSION_SECRET não definida no ambiente de produção!');
+}
 
 if (isDev) {
-  // Configuração para desenvolvimento
   sessionConfig = {
-    secret: process.env.SESSION_SECRET || 'app_empreiteiros_secret',
+    secret: sessionSecret || 'app_empreiteiros_secret_dev',
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     cookie: {
-      maxAge: 1000 * 60 * 60 * 24 // 24 horas
+      maxAge: 1000 * 60 * 60 * 24,
+      secure: false,
+      httpOnly: true
     }
   };
 } else {
-  // Configuração para produção
   try {
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false }
     });
-    
-    // Testar conexão
+
     pool.query('SELECT NOW()')
-      .then(() => console.log('✅ Banco de dados conectado com sucesso'))
-      .catch(err => console.error('⚠️ Erro na conexão com o banco de dados:', err.message));
-    
-    // Mesmo que dê erro na consulta acima, tentamos configurar o store
-    // Se falhar, o catch abaixo pega o erro
+      .then(() => console.log('✅ Banco de dados conectado com sucesso para sessão'))
+      .catch(err => console.error('⚠️ Erro ao testar conexão com banco para sessão:', err.message));
+
     sessionConfig = {
       store: new PgSession({
         pool,
         tableName: 'session',
         createTableIfMissing: true
       }),
-      secret: process.env.SESSION_SECRET || 'app_empreiteiros_secret_production',
+      secret: sessionSecret,
       resave: false,
-      saveUninitialized: true,
+      saveUninitialized: false,
       cookie: {
-        maxAge: 1000 * 60 * 60 * 24, // 24 horas
-        secure: process.env.NODE_ENV === 'production' && !isDev,
-        httpOnly: true
+        maxAge: 1000 * 60 * 60 * 24,
+        secure: true,
+        httpOnly: true,
+        sameSite: 'lax'
       }
     };
   } catch (error) {
-    // Em caso de erro na configuração, usar sessão em memória
-    console.error('❌ Erro ao configurar sessão com PostgreSQL. Usando sessão em memória:', error.message);
-    
+    console.error('❌ Erro CRÍTICO ao configurar PgSession. Usando sessão em memória como fallback:', error.message);
     sessionConfig = {
-      secret: process.env.SESSION_SECRET || 'app_empreiteiros_secret_fallback',
+      secret: sessionSecret,
       resave: false,
-      saveUninitialized: true,
+      saveUninitialized: false,
       cookie: {
-        maxAge: 1000 * 60 * 60 * 24, // 24 horas
-        secure: false
+        maxAge: 1000 * 60 * 60 * 24,
+        secure: true,
+        httpOnly: true,
+        sameSite: 'lax'
       }
     };
   }
@@ -104,19 +133,22 @@ if (isDev) {
 app.use(session(sessionConfig));
 app.use(flash());
 
+// Configuração de proteção CSRF
+const csrfProtection = csrf({ cookie: false }); // Usa a sessão para armazenar o token
+app.use(csrfProtection);
+
 // Middleware para disponibilizar variáveis globais para as views
 app.use((req, res, next) => {
   res.locals.user = req.session.user || null;
   res.locals.success_msg = req.flash('success_msg');
   res.locals.error_msg = req.flash('error_msg');
-  // Configurando variáveis padrão para todos os templates
   res.locals.title = 'App Empreiteiros';
+  res.locals.csrfToken = req.csrfToken(); // Disponibiliza o token CSRF para todas as views
   next();
 });
 
 // Health check melhorado para o Render
 app.get('/health', (req, res) => {
-  // Informações básicas de saúde do aplicativo
   const healthInfo = {
     status: 'up',
     timestamp: new Date().toISOString(),
@@ -124,15 +156,14 @@ app.get('/health', (req, res) => {
     environment: isDev ? 'development' : 'production',
     memory: process.memoryUsage(),
   };
-  
-  // Verificando conexão com o banco de dados
+
   if (!isDev) {
     const healthCheckPool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 5000 // 5 segundos de timeout para health check
+      connectionTimeoutMillis: 5000
     });
-    
+
     healthCheckPool.query('SELECT 1')
       .then(() => {
         healthInfo.database = 'connected';
@@ -142,7 +173,6 @@ app.get('/health', (req, res) => {
       .catch(err => {
         healthInfo.database = 'disconnected';
         healthInfo.databaseError = err.message;
-        // Ainda retornamos 200 para evitar que o Render reinicie desnecessariamente
         res.status(200).json(healthInfo);
         healthCheckPool.end();
       });
@@ -178,7 +208,6 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  // Log detalhado do erro
   console.error('==================== ERRO DO SERVIDOR ====================');
   console.error(`Timestamp: ${new Date().toISOString()}`);
   console.error(`Rota: ${req.method} ${req.originalUrl}`);
@@ -186,7 +215,6 @@ app.use((err, req, res, next) => {
   console.error(`Erro: ${err.message}`);
   console.error(`Stack: ${err.stack}`);
   
-  // Tentar capturar informações adicionais do erro
   if (err.code) console.error(`Código do erro: ${err.code}`);
   if (err.errno) console.error(`Errno: ${err.errno}`);
   if (err.syscall) console.error(`Syscall: ${err.syscall}`);
@@ -194,7 +222,6 @@ app.use((err, req, res, next) => {
   if (err.port) console.error(`Porta: ${err.port}`);
   console.error('=========================================================');
   
-  // Renderizar página de erro para o usuário
   res.status(500).render('error', {
     title: 'Erro no servidor',
     message: isDev ? err.message : 'Ocorreu um erro no servidor. Nossa equipe foi notificada.'
@@ -203,36 +230,34 @@ app.use((err, req, res, next) => {
 
 // Inicialização do servidor
 if (require.main === module) {
-  // Testar a conexão com o banco de dados antes de iniciar o servidor
   if (!isDev) {
     const testPool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 10000
     });
-    
+
     testPool.connect()
       .then(client => {
-        console.log('Conexão com o banco de dados estabelecida com sucesso!');
+        console.log('✅ Conexão inicial com o banco de dados estabelecida com sucesso!');
         client.release();
-        
-        // Iniciar o servidor após confirmar conexão com o banco
+        testPool.end();
+
         app.listen(PORT, '0.0.0.0', () => {
-          console.log(`Servidor rodando em http://localhost:${PORT} no modo ${isDev ? 'desenvolvimento' : 'produção'}`);
+          console.log(`🚀 Servidor rodando em http://localhost:${PORT} no modo produção`);
         });
       })
       .catch(err => {
-        console.error('Erro na conexão com o banco de dados:', err);
-        console.log('Tentando iniciar o servidor mesmo assim...');
-        
-        // Tentar iniciar o servidor mesmo com erro na conexão com o banco
+        console.error('❌ Erro CRÍTICO na conexão inicial com o banco de dados:', err.message);
+        testPool.end();
+        console.log('⚠️ Tentando iniciar o servidor mesmo com falha na conexão inicial com o banco...');
         app.listen(PORT, '0.0.0.0', () => {
-          console.log(`Servidor rodando em http://localhost:${PORT} no modo ${isDev ? 'desenvolvimento' : 'produção'} (Aviso: problemas na conexão com o banco de dados)`);
+          console.log(`🚀 Servidor rodando em http://localhost:${PORT} no modo produção (AVISO: Falha na conexão inicial com DB)`);
         });
       });
   } else {
-    // Em desenvolvimento, iniciar normalmente
     app.listen(PORT, () => {
-      console.log(`Servidor rodando em http://localhost:${PORT} no modo ${isDev ? 'desenvolvimento' : 'produção'}`);
+      console.log(`🚀 Servidor rodando em http://localhost:${PORT} no modo desenvolvimento`);
     });
   }
 }

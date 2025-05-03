@@ -1,0 +1,195 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-user me-2"></i> Detalhes: <%= funcionario.nome %></h1>
+    <div>
+        <a href="/funcionarios/<%= funcionario.id %>/editar" class="btn btn-secondary me-2">
+            <i class="fas fa-edit me-2"></i> Editar
+        </a>
+        <a href="/funcionarios" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i> Voltar para Lista
+        </a>
+    </div>
+</div>
+
+<%# Exibir mensagens flash %>
+<% if (typeof success_msg !== 'undefined' && success_msg.length > 0) { %>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <%= success_msg %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+    </div>
+<% } %>
+<% if (typeof error_msg !== 'undefined' && error_msg.length > 0) { %>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <%= error_msg %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+    </div>
+<% } %>
+
+<div class="row g-4">
+    <%# Card de Informações %>
+    <div class="col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header">
+                <i class="fas fa-info-circle me-2"></i> Informações do Funcionário
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-4">Nome:</dt>
+                    <dd class="col-sm-8"><%= funcionario.nome %></dd>
+
+                    <dt class="col-sm-4">Contato:</dt>
+                    <dd class="col-sm-8"><%= funcionario.contato || '-' %></dd>
+
+                    <dt class="col-sm-4">Função:</dt>
+                    <dd class="col-sm-8"><%= funcionario.funcao || '-' %></dd>
+
+                    <dt class="col-sm-4">Status:</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge <%= funcionario.status === 'ativo' ? 'bg-success' : 'bg-secondary' %>">
+                            <%= funcionario.status === 'ativo' ? 'Ativo' : 'Inativo' %>
+                        </span>
+                    </dd>
+
+                    <dt class="col-sm-4">Valor Diária:</dt>
+                    <dd class="col-sm-8">R$ <%= funcionario.valor_diaria ? funcionario.valor_diaria.toFixed(2) : '0.00' %></dd>
+
+                    <dt class="col-sm-4">Valor Hora Extra:</dt>
+                    <dd class="col-sm-8">R$ <%= funcionario.valor_hora_extra ? funcionario.valor_hora_extra.toFixed(2) : '0.00' %></dd>
+
+                    <dt class="col-sm-4">Valor Empreitada:</dt>
+                    <dd class="col-sm-8">R$ <%= funcionario.valor_empreitada ? funcionario.valor_empreitada.toFixed(2) : '0.00' %></dd>
+
+                    <dt class="col-sm-4">Observações:</dt>
+                    <dd class="col-sm-8"><%= funcionario.observacoes || '-' %></dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <%# Card de Totais e Adiantamentos %>
+    <div class="col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header">
+                <i class="fas fa-dollar-sign me-2"></i> Financeiro
+            </div>
+            <div class="card-body">
+                <h5 class="card-title mb-3">Resumo Financeiro (Aproximado)</h5>
+                <ul class="list-group list-group-flush mb-3">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Total Ganho (Diárias):
+                        <span class="badge bg-primary rounded-pill">R$ <%= totais.total_ganho ? totais.total_ganho.toFixed(2) : '0.00' %></span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Total Extras:
+                        <span class="badge bg-info rounded-pill">R$ <%= totais.total_extras ? totais.total_extras.toFixed(2) : '0.00' %></span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Total Adiantamentos:
+                        <span class="badge bg-warning text-dark rounded-pill">R$ <%= totais.total_adiantamentos ? totais.total_adiantamentos.toFixed(2) : '0.00' %></span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center fw-bold">
+                        Saldo Atual:
+                        <span class="badge <%= (totais.saldo_atual && totais.saldo_atual > 0) ? 'bg-success' : 'bg-danger' %> rounded-pill">
+                            R$ <%= totais.saldo_atual ? totais.saldo_atual.toFixed(2) : '0.00' %>
+                        </span>
+                    </li>
+                </ul>
+
+                <hr>
+
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="card-title mb-0">Últimos Adiantamentos</h5>
+                    <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#adiantamentoModal">
+                        <i class="fas fa-plus me-1"></i> Registrar Adiantamento
+                    </button>
+                </div>
+                <% if (adiantamentos && adiantamentos.length > 0) { %>
+                    <ul class="list-group list-group-flush">
+                        <% adiantamentos.slice(0, 5).forEach(ad => { %> <%# Limitar a 5 %>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <%= new Date(ad.data).toLocaleDateString('pt-BR') %>:
+                                    <span class="text-muted ms-2"><%= ad.descricao || 'Adiantamento' %></span>
+                                </div>
+                                <span class="badge bg-secondary rounded-pill">R$ <%= ad.valor.toFixed(2) %></span>
+                            </li>
+                        <% }); %>
+                    </ul>
+                <% } else { %>
+                    <p class="text-muted">Nenhum adiantamento registrado recentemente.</p>
+                <% } %>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%# Card de Trabalhos Recentes %>
+<div class="card shadow-sm mt-4">
+    <div class="card-header">
+        <i class="fas fa-briefcase me-2"></i> Trabalhos Recentes
+    </div>
+    <div class="card-body">
+        <% if (trabalhos && trabalhos.length > 0) { %>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Projeto</th>
+                            <th>Dias Trab.</th>
+                            <th>Horas Extras</th>
+                            <th>Empreitada?</th>
+                            <th>Valor Empreitada</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% trabalhos.forEach(trab => { %>
+                            <tr>
+                                <td><%= new Date(trab.data).toLocaleDateString('pt-BR') %></td>
+                                <td><a href="/projetos/<%= trab.projeto_id %>"><%= trab.projeto_nome %></a></td>
+                                <td><%= trab.dias_trabalhados || '-' %></td>
+                                <td><%= trab.horas_extras || '-' %></td>
+                                <td><%= trab.empreitada ? 'Sim' : 'Não' %></td>
+                                <td><%= trab.empreitada && trab.valor_empreitada ? `R$ ${trab.valor_empreitada.toFixed(2)}` : '-' %></td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        <% } else { %>
+            <p class="text-muted">Nenhum trabalho registrado para este funcionário.</p>
+        <% } %>
+    </div>
+</div>
+
+<%# Modal para Registrar Adiantamento %>
+<div class="modal fade" id="adiantamentoModal" tabindex="-1" aria-labelledby="adiantamentoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="/funcionarios/<%= funcionario.id %>/adiantamento" method="POST">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="adiantamentoModalLabel">Registrar Adiantamento para <%= funcionario.nome %></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="valor" class="form-label">Valor (R$) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0" class="form-control" id="valor" name="valor" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="data" class="form-label">Data <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="data" name="data" value="<%= new Date().toISOString().split('T')[0] %>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">Descrição (Opcional)</label>
+                        <input type="text" class="form-control" id="descricao" name="descricao">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Registrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

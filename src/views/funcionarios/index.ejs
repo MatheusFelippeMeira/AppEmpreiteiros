@@ -1,0 +1,73 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-hard-hat me-2"></i> Funcionários</h1>
+    <a href="/funcionarios/novo" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i> Novo Funcionário
+    </a>
+</div>
+
+<%# Exibir mensagens flash (já incluídas no layout main.ejs, mas pode ser útil ter aqui também se necessário) %>
+<% /* if (typeof success_msg !== 'undefined' && success_msg.length > 0) { %>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <%= success_msg %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+    </div>
+<% } %>
+<% if (typeof error_msg !== 'undefined' && error_msg.length > 0) { %>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <%= error_msg %>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+    </div>
+<% } */ %>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <h5 class="card-title mb-3">Lista de Funcionários</h5>
+        <% if (funcionarios && funcionarios.length > 0) { %>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nome</th>
+                            <th>Função</th>
+                            <th>Contato</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% funcionarios.forEach(func => { %>
+                            <tr>
+                                <td><%= func.nome %></td>
+                                <td><%= func.funcao || '-' %></td>
+                                <td><%= func.contato || '-' %></td>
+                                <td>
+                                    <span class="badge <%= func.status === 'ativo' ? 'bg-success' : 'bg-secondary' %>">
+                                        <%= func.status === 'ativo' ? 'Ativo' : 'Inativo' %>
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="/funcionarios/<%= func.id %>" class="btn btn-sm btn-outline-primary me-1" title="Ver Detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="/funcionarios/<%= func.id %>/editar" class="btn btn-sm btn-outline-secondary" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <%# Botão de deletar pode ser adicionado aqui com confirmação %>
+                                    <% /* 
+                                    <form action="/funcionarios/<%= func.id %>?_method=DELETE" method="POST" class="d-inline ms-1" onsubmit="return confirm('Tem certeza que deseja excluir este funcionário?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                    */ %>
+                                </td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        <% } else { %>
+            <div class="alert alert-info">Nenhum funcionário cadastrado ainda.</div>
+        <% } %>
+    </div>
+</div>
