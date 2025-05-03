@@ -45,7 +45,7 @@
         <% } %>
 
         <!-- Conteúdo da página -->
-        <%- corpo %>
+        <%- typeof body !== 'undefined' ? body : (typeof corpo !== 'undefined' ? corpo : '') %>
     </main>
 
     <!-- Footer -->

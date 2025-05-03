@@ -2,7 +2,7 @@ const db = require('../config/database');
 
 class Relatorio {
   // Relatório de lucratividade por projeto
-  static getLucratividadePorProjeto(filtros, callback) {
+  static async getLucratividadePorProjeto(filtros) {
     let sql = `SELECT 
                 p.id, p.nome, p.tipo, p.localidade, p.data_inicio, p.data_fim_real,
                 c.nome as cliente_nome,
@@ -55,11 +55,16 @@ class Relatorio {
     
     sql += ` ORDER BY p.data_inicio DESC`;
     
-    db.all(sql, params, callback);
+    try {
+      return await db.promiseAll(sql, params);
+    } catch (err) {
+      console.error('Erro ao buscar lucratividade por projeto:', err);
+      throw err;
+    }
   }
   
   // Relatório de custos por categoria
-  static getCustosPorCategoria(filtros, callback) {
+  static async getCustosPorCategoria(filtros) {
     let sql = `SELECT 
                 g.categoria,
                 SUM(g.valor) as total_valor,
@@ -84,11 +89,16 @@ class Relatorio {
     sql += ` GROUP BY g.categoria
              ORDER BY total_valor DESC`;
     
-    db.all(sql, params, callback);
+    try {
+      return await db.promiseAll(sql, params);
+    } catch (err) {
+      console.error('Erro ao buscar custos por categoria:', err);
+      throw err;
+    }
   }
   
   // Relatório de pagamento de funcionários
-  static getPagamentoFuncionarios(filtros, callback) {
+  static async getPagamentoFuncionarios(filtros) {
     let sql = `SELECT 
                 f.id, f.nome, f.funcao,
                 SUM(t.dias_trabalhados) as total_dias,
@@ -132,11 +142,16 @@ class Relatorio {
     sql += ` GROUP BY f.id
              ORDER BY total_bruto DESC`;
     
-    db.all(sql, params, callback);
+    try {
+      return await db.promiseAll(sql, params);
+    } catch (err) {
+      console.error('Erro ao buscar pagamento de funcionários:', err);
+      throw err;
+    }
   }
   
   // Relatório de resumo por projeto
-  static getResumoProjeto(id, callback) {
+  static async getResumoProjeto(id) {
     const sql = `SELECT 
                   p.id, p.nome, p.tipo, p.localidade, p.status,
                   p.data_inicio, p.data_fim_prevista, p.data_fim_real,
@@ -161,9 +176,11 @@ class Relatorio {
                 LEFT JOIN clientes c ON p.cliente_id = c.id
                 WHERE p.id = ?`;
     
-    db.get(sql, [id], (err, projeto) => {
-      if (err || !projeto) {
-        return callback(err, null);
+    try {
+      const projeto = await db.promiseGet(sql, [id]);
+      
+      if (!projeto) {
+        throw new Error('Projeto não encontrado');
       }
       
       // Obter gastos por categoria
@@ -172,45 +189,40 @@ class Relatorio {
                         WHERE projeto_id = ?
                         GROUP BY categoria`;
       
-      db.all(sqlGastos, [id], (err, gastosPorCategoria) => {
-        if (err) {
-          return callback(err, null);
-        }
-        
-        // Obter dados dos funcionários
-        const sqlFuncionarios = `SELECT 
-                                f.nome, f.funcao,
-                                SUM(t.dias_trabalhados) as dias_trabalhados,
-                                SUM(t.horas_extras) as horas_extras,
-                                SUM(CASE 
-                                  WHEN t.empreitada = 1 THEN t.valor_empreitada 
-                                  ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
-                                END) as valor_total
-                              FROM trabalhos t
-                              JOIN funcionarios f ON t.funcionario_id = f.id
-                              WHERE t.projeto_id = ?
-                              GROUP BY f.id
-                              ORDER BY valor_total DESC`;
-        
-        db.all(sqlFuncionarios, [id], (err, funcionarios) => {
-          if (err) {
-            return callback(err, null);
-          }
-          
-          // Retornar dados completos
-          callback(null, {
-            ...projeto,
-            gastosPorCategoria,
-            funcionarios,
-            lucro_liquido: projeto.valor_receber - projeto.total_gastos - projeto.custo_mao_obra
-          });
-        });
-      });
-    });
+      const gastosPorCategoria = await db.promiseAll(sqlGastos, [id]);
+      
+      // Obter dados dos funcionários
+      const sqlFuncionarios = `SELECT 
+                              f.nome, f.funcao,
+                              SUM(t.dias_trabalhados) as dias_trabalhados,
+                              SUM(t.horas_extras) as horas_extras,
+                              SUM(CASE 
+                                WHEN t.empreitada = 1 THEN t.valor_empreitada 
+                                ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
+                              END) as valor_total
+                            FROM trabalhos t
+                            JOIN funcionarios f ON t.funcionario_id = f.id
+                            WHERE t.projeto_id = ?
+                            GROUP BY f.id
+                            ORDER BY valor_total DESC`;
+      
+      const funcionarios = await db.promiseAll(sqlFuncionarios, [id]);
+      
+      // Retornar dados completos
+      return {
+        ...projeto,
+        gastosPorCategoria,
+        funcionarios,
+        lucro_liquido: projeto.valor_receber - projeto.total_gastos - projeto.custo_mao_obra
+      };
+    } catch (err) {
+      console.error('Erro ao buscar resumo do projeto:', err);
+      throw err;
+    }
   }
   
   // Dashboard - indicadores principais
-  static getDashboardIndicadores(callback) {
+  static async getDashboardIndicadores() {
     const sql = `SELECT 
                   (SELECT COUNT(*) FROM projetos WHERE status = 'em_andamento') as projetos_andamento,
                   (SELECT COUNT(*) FROM projetos WHERE status = 'concluido') as projetos_concluidos,
@@ -226,7 +238,20 @@ class Relatorio {
                     JOIN funcionarios f ON t.funcionario_id = f.id
                   ) as total_mao_obra`;
     
-    db.get(sql, [], callback);
+    try {
+      return await db.promiseGet(sql, []);
+    } catch (err) {
+      console.error('Erro ao buscar indicadores do dashboard:', err);
+      // Retornar valores padrão em caso de erro para evitar quebra na interface
+      return {
+        projetos_andamento: 0,
+        projetos_concluidos: 0,
+        receita_total: 0,
+        gastos_totais: 0,
+        total_funcionarios: 0,
+        total_mao_obra: 0
+      };
+    }
   }
 }
 
