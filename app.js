@@ -72,8 +72,12 @@ if (isDev) {
 let sessionConfig;
 const sessionSecret = process.env.SESSION_SECRET;
 
+// Definir um secret padrão para produção (não ideal, mas evita erros fatais)
+const defaultProductionSecret = 'app_empreiteiros_secret_production_' + new Date().getFullYear();
+
 if (!isDev && !sessionSecret) {
-  console.error('❌ ERRO CRÍTICO: SESSION_SECRET não definida no ambiente de produção!');
+  console.error('⚠️ AVISO: SESSION_SECRET não definida no ambiente de produção! Usando secret temporário.');
+  console.error('⚠️ RECOMENDAÇÃO: Configure a variável de ambiente SESSION_SECRET no seu servidor Render.');
 }
 
 if (isDev) {
@@ -104,7 +108,7 @@ if (isDev) {
         tableName: 'session',
         createTableIfMissing: true
       }),
-      secret: sessionSecret,
+      secret: sessionSecret || defaultProductionSecret,
       resave: false,
       saveUninitialized: false,
       cookie: {
@@ -117,7 +121,7 @@ if (isDev) {
   } catch (error) {
     console.error('❌ Erro CRÍTICO ao configurar PgSession. Usando sessão em memória como fallback:', error.message);
     sessionConfig = {
-      secret: sessionSecret,
+      secret: sessionSecret || defaultProductionSecret,
       resave: false,
       saveUninitialized: false,
       cookie: {
