@@ -27,8 +27,30 @@ const PORT = process.env.PORT || 3000;
 // View engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'src/views'));
+
+// Configuração do express-ejs-layouts
 app.use(ejsLayouts);
 app.set('layout', 'layouts/main');
+app.set('layout extractScripts', true);
+app.set('layout extractStyles', true);
+app.set('layout extractMetas', true);
+
+// Configurar variável de conteúdo para compatibilidade
+app.use((req, res, next) => {
+  const originalRender = res.render;
+  res.render = function(view, options, callback) {
+    options = options || {};
+    // Garantir que 'corpo' e 'body' sejam a mesma coisa
+    if (options.corpo && !options.body) {
+      options.body = options.corpo;
+    }
+    if (options.body && !options.corpo) {
+      options.corpo = options.body;
+    }
+    originalRender.call(this, view, options, callback);
+  };
+  next();
+});
 
 // Middlewares
 app.use(express.json());
