@@ -19,6 +19,9 @@
                 <% } %>
 
                 <form action="/auth/registro" method="POST">
+                    <!-- Campo oculto para o token CSRF -->
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    
                     <div class="mb-3">
                         <label for="nome" class="form-label">Nome:</label>
                         <div class="input-group">

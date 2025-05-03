@@ -156,19 +156,69 @@ if (isDev || forceSqliteSession) {
 app.use(session(sessionConfig));
 app.use(flash());
 
-// Configuração de proteção CSRF
-const csrfProtection = csrf({ cookie: false }); // Usa a sessão para armazenar o token
-app.use(csrfProtection);
+// Configuração de proteção CSRF melhorada com tratamento de erros
+const csrfOptions = {
+  cookie: isDev ? false : {
+    secure: true,
+    sameSite: 'lax',
+    httpOnly: true
+  }
+};
+
+// Uso de CSRF com tratamento adequado de erros
+app.use((req, res, next) => {
+  // Ignorar CSRF em rotas específicas, como APIs ou webhooks (se necessário)
+  if (req.path === '/health' || req.path.startsWith('/api/')) {
+    return next();
+  }
+  
+  csrf(csrfOptions)(req, res, (err) => {
+    if (err && err.code === 'EBADCSRFTOKEN') {
+      // Se ocorrer erro de CSRF, registrar e renderizar tela de erro específica
+      console.error('⚠️ Erro CSRF:', err.message);
+      console.error(`  Caminho: ${req.path}`);
+      console.error(`  Método: ${req.method}`);
+      console.error(`  IP: ${req.ip}`);
+      
+      // Enviar flash message e redirecionar para login em caso de erro CSRF
+      req.flash('error_msg', 'Sessão expirada ou inválida. Por favor, faça login novamente.');
+      
+      // Em caso de AJAX, retornar erro em JSON
+      if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
+        return res.status(403).json({ error: 'Sessão expirada ou inválida.' });
+      }
+      
+      return res.redirect('/auth/login');
+    }
+    next(err);
+  });
+});
 
 // Middleware para disponibilizar variáveis globais para as views
 app.use((req, res, next) => {
-  res.locals.user = req.session.user || null;
-  res.locals.usuario = req.session.user || null; // Adicionando variável usuario para compatibilidade
-  res.locals.success_msg = req.flash('success_msg');
-  res.locals.error_msg = req.flash('error_msg');
-  res.locals.title = 'App Empreiteiros';
-  res.locals.csrfToken = req.csrfToken(); // Disponibiliza o token CSRF para todas as views
-  next();
+  try {
+    // Disponibiliza o token CSRF para todas as views se estiver disponível
+    if (req.csrfToken) {
+      res.locals.csrfToken = req.csrfToken();
+    }
+    
+    res.locals.user = req.session.user || null;
+    res.locals.usuario = req.session.user || null; // Adicionando variável usuario para compatibilidade
+    res.locals.success_msg = req.flash('success_msg');
+    res.locals.error_msg = req.flash('error_msg');
+    res.locals.title = 'App Empreiteiros';
+    next();
+  } catch (error) {
+    // Se houver erro ao gerar token CSRF, log e continuar
+    console.error('Erro ao gerar token CSRF:', error.message);
+    res.locals.user = req.session.user || null;
+    res.locals.usuario = req.session.user || null;
+    res.locals.success_msg = req.flash('success_msg');
+    res.locals.error_msg = req.flash('error_msg');
+    res.locals.title = 'App Empreiteiros';
+    res.locals.csrfToken = 'error'; // Valor de fallback para evitar quebrar os templates
+    next();
+  }
 });
 
 // Health check melhorado para o Render
