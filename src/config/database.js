@@ -133,6 +133,8 @@ const setupSupabaseApi = () => {
   return {
     async promiseAll(query, params = []) {
       try {
+        console.log('Executando promiseAll:', query, params);
+        
         // Extrair o nome da tabela da consulta SQL
         const tableMatch = query.match(/FROM\s+([^\s,]+)/i);
         const table = tableMatch ? tableMatch[1] : null;
@@ -142,19 +144,24 @@ const setupSupabaseApi = () => {
         }
         
         // Converter parâmetros do estilo ? para nomes de colunas e valores
-        // Esta é uma versão simplificada - para consultas complexas, será necessária uma conversão mais robusta
         let supaQuery = supabase.from(table).select('*');
         
         // Se a consulta tiver WHERE, convertemos para filtros do Supabase
-        const whereMatch = query.match(/WHERE\s+([^\s]+)\s*=\s*\?/i);
+        const whereMatch = query.match(/WHERE\s+([^\s]+)\s*\=\s*\?/i);
         if (whereMatch && params.length > 0) {
           const column = whereMatch[1];
+          console.log(`Buscando em ${table} onde ${column}=${params[0]}`);
           supaQuery = supaQuery.eq(column, params[0]);
         }
         
         const { data, error } = await supaQuery;
         
-        if (error) throw error;
+        if (error) {
+          console.error('Erro na consulta Supabase:', error);
+          throw error;
+        }
+        
+        console.log(`Resultado da busca em ${table}:`, data?.length > 0 ? 'Encontrados ' + data.length + ' registros' : 'Nenhum registro encontrado');
         return data || [];
       } catch (error) {
         console.error(`Erro ao executar query no Supabase (promiseAll):`, error.message);
@@ -166,11 +173,38 @@ const setupSupabaseApi = () => {
     
     async promiseGet(query, params = []) {
       try {
-        // Similar ao promiseAll, mas retornando apenas o primeiro resultado
+        console.log('Executando promiseGet:', query, params);
+        
+        // Para consultas diretas no users, usamos uma abordagem simplificada
+        // que garante compatibilidade com o Supabase
+        if (query.includes('FROM users WHERE email = ?') && params.length > 0) {
+          console.log('Busca especial de usuário por email:', params[0]);
+          
+          const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', params[0])
+            .limit(1);
+            
+          if (error) {
+            console.error('Erro na consulta de usuário:', error);
+            throw error;
+          }
+          
+          console.log('Resultado da busca de usuário:', data?.length > 0 ? 'Usuário encontrado' : 'Usuário NÃO encontrado');
+          
+          // Retornar o primeiro resultado ou null
+          return data && data.length > 0 ? data[0] : null;
+        }
+        
+        // Para outras consultas, usamos a implementação padrão
         const results = await this.promiseAll(query, params);
-        return results[0] || null;
+        console.log(`Resultado genérico promiseGet:`, results?.length > 0 ? 'Encontrado' : 'Não encontrado');
+        return results && results.length > 0 ? results[0] : null;
       } catch (error) {
         console.error(`Erro ao executar query no Supabase (promiseGet):`, error.message);
+        console.error(`Query original: ${query}`);
+        console.error(`Params: ${JSON.stringify(params)}`);
         throw error;
       }
     },
@@ -309,25 +343,26 @@ const setupSupabaseApi = () => {
 };
 
 // Decidir qual implementação de banco de dados usar
-if (isProduction && !forceSqlite && useSupabaseApi) {
+// Para o servidor Render, vamos forçar o uso do Supabase para autenticação
+if (isProduction || process.env.RENDER || useSupabaseApi) {
   try {
     // Usar a API do Supabase
     console.log('Usando Supabase API para acesso ao banco de dados');
     db = setupSupabaseApi();
   } catch (error) {
     console.error('❌ Erro ao configurar cliente da API Supabase:', error.message);
-    console.error('⚠️ Usando SQLite como fallback em produção');
+    console.error('⚠️ Usando SQLite como fallback');
     
     const dbPath = path.join(__dirname, '../../data_prod.db');
     db = setupSQLite(dbPath);
   }
 } else {
-  // Ambiente de desenvolvimento OU forçando SQLite
+  // Ambiente de desenvolvimento local sem Supabase
   const dbPath = process.env.DB_PATH 
     ? process.env.DB_PATH 
     : path.join(__dirname, '../../data.db');
   
-  console.log('Usando SQLite (ambiente de desenvolvimento ou forçado)');
+  console.log('Usando SQLite para desenvolvimento local sem Supabase');
   db = setupSQLite(dbPath);
 }
 
