@@ -124,300 +124,177 @@ class Relatorio {
                   FROM adiantamentos 
                   WHERE funcionario_id = f.id
                   AND data BETWEEN ? AND ?
-                ), 0) as valor_a_pagar
+                ), 0) as valor_a_receber
               FROM funcionarios f
-              LEFT JOIN trabalhos t ON f.id = t.funcionario_id AND t.data BETWEEN ? AND ?`;
+              LEFT JOIN trabalhos t ON t.funcionario_id = f.id
+              LEFT JOIN projetos p ON t.projeto_id = p.id
+              WHERE t.data BETWEEN ? AND ?`;
     
     let params = [
-      filtros.dataInicio, filtros.dataFim,
-      filtros.dataInicio, filtros.dataFim,
-      filtros.dataInicio, filtros.dataFim
+      filtros.dataInicio, filtros.dataFim,  // Para os adiantamentos
+      filtros.dataInicio, filtros.dataFim,  // Para os adiantamentos novamente
+      filtros.dataInicio, filtros.dataFim   // Para o período de trabalho
     ];
     
+    // Filtro por funcionário específico
     if (filtros.funcionarioId) {
-      sql += ` WHERE f.id = ?`;
+      sql += ` AND f.id = ?`;
       params.push(filtros.funcionarioId);
     }
     
     sql += ` GROUP BY f.id
-             ORDER BY total_bruto DESC`;
+             ORDER BY f.nome`;
     
     try {
       return await db.promiseAll(sql, params);
     } catch (err) {
-      console.error('Erro ao buscar pagamento de funcionários:', err);
+      console.error('Erro ao buscar pagamentos de funcionários:', err);
       throw err;
     }
   }
   
-  // Relatório de resumo por projeto
-  static async getResumoProjeto(id) {
-    const sql = `SELECT 
-                  p.id, p.nome, p.tipo, p.localidade, p.status,
-                  p.data_inicio, p.data_fim_prevista, p.data_fim_real,
-                  c.nome as cliente_nome, c.contato as cliente_contato,
-                  p.valor_receber,
-                  COALESCE((SELECT SUM(valor) FROM gastos WHERE projeto_id = p.id), 0) as total_gastos,
-                  COALESCE((
-                    SELECT SUM(
-                      CASE 
-                        WHEN t.empreitada = 1 THEN t.valor_empreitada 
-                        ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
-                      END
-                    )
-                    FROM trabalhos t
-                    JOIN funcionarios f ON t.funcionario_id = f.id
-                    WHERE t.projeto_id = p.id
-                  ), 0) as custo_mao_obra,
-                  p.deslocamento_incluido,
-                  JULIANDAY(COALESCE(p.data_fim_real, CURRENT_DATE)) - JULIANDAY(p.data_inicio) as dias_duracao,
-                  JULIANDAY(p.data_fim_prevista) - JULIANDAY(p.data_inicio) as dias_previstos
-                FROM projetos p
-                LEFT JOIN clientes c ON p.cliente_id = c.id
-                WHERE p.id = ?`;
-    
+  // Obter resumo detalhado de um projeto
+  static async getResumoProjeto(projetoId) {
     try {
-      const projeto = await db.promiseGet(sql, [id]);
+      // Buscar informações básicas do projeto
+      const sqlProjeto = `
+        SELECT 
+          p.*,
+          c.nome as cliente_nome,
+          c.telefone as cliente_contato,
+          COALESCE((SELECT SUM(valor) FROM gastos WHERE projeto_id = p.id), 0) as total_gastos,
+          COALESCE((
+            SELECT SUM(
+              CASE 
+                WHEN t.empreitada = 1 THEN t.valor_empreitada 
+                ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
+              END
+            )
+            FROM trabalhos t
+            JOIN funcionarios f ON t.funcionario_id = f.id
+            WHERE t.projeto_id = p.id
+          ), 0) as custo_mao_obra,
+          DATEDIFF(p.data_fim_prevista, p.data_inicio) as dias_previstos,
+          CASE 
+            WHEN p.data_fim_real IS NOT NULL THEN DATEDIFF(p.data_fim_real, p.data_inicio)
+            ELSE DATEDIFF(CURRENT_DATE, p.data_inicio)
+          END as dias_duracao
+        FROM projetos p
+        LEFT JOIN clientes c ON p.cliente_id = c.id
+        WHERE p.id = ?
+      `;
+      
+      const projeto = await db.promiseGet(sqlProjeto, [projetoId]);
       
       if (!projeto) {
-        throw new Error('Projeto não encontrado');
+        return null;
       }
       
-      // Obter gastos por categoria
-      const sqlGastos = `SELECT categoria, SUM(valor) as total
-                        FROM gastos
-                        WHERE projeto_id = ?
-                        GROUP BY categoria`;
+      // Calcular lucro líquido
+      projeto.lucro_liquido = projeto.valor_receber - projeto.total_gastos - projeto.custo_mao_obra;
       
-      const gastosPorCategoria = await db.promiseAll(sqlGastos, [id]);
+      // Buscar gastos por categoria
+      const sqlGastosPorCategoria = `
+        SELECT 
+          categoria,
+          SUM(valor) as total
+        FROM gastos
+        WHERE projeto_id = ?
+        GROUP BY categoria
+        ORDER BY total DESC
+      `;
       
-      // Obter dados dos funcionários
-      const sqlFuncionarios = `SELECT 
-                              f.nome, f.funcao,
-                              SUM(t.dias_trabalhados) as dias_trabalhados,
-                              SUM(t.horas_extras) as horas_extras,
-                              SUM(CASE 
-                                WHEN t.empreitada = 1 THEN t.valor_empreitada 
-                                ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
-                              END) as valor_total
-                            FROM trabalhos t
-                            JOIN funcionarios f ON t.funcionario_id = f.id
-                            WHERE t.projeto_id = ?
-                            GROUP BY f.id
-                            ORDER BY valor_total DESC`;
+      projeto.gastosPorCategoria = await db.promiseAll(sqlGastosPorCategoria, [projetoId]);
       
-      const funcionarios = await db.promiseAll(sqlFuncionarios, [id]);
+      // Buscar funcionários que trabalharam no projeto
+      const sqlFuncionarios = `
+        SELECT 
+          f.id,
+          f.nome,
+          f.funcao,
+          SUM(
+            CASE 
+              WHEN t.empreitada = 1 THEN t.valor_empreitada 
+              ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
+            END
+          ) as valor_total,
+          SUM(t.dias_trabalhados) as dias_trabalhados,
+          SUM(t.horas_extras) as horas_extras
+        FROM funcionarios f
+        JOIN trabalhos t ON f.id = t.funcionario_id
+        WHERE t.projeto_id = ?
+        GROUP BY f.id
+        ORDER BY valor_total DESC
+      `;
       
-      // Retornar dados completos
-      return {
-        ...projeto,
-        gastosPorCategoria,
-        funcionarios,
-        lucro_liquido: projeto.valor_receber - projeto.total_gastos - projeto.custo_mao_obra
-      };
+      projeto.funcionarios = await db.promiseAll(sqlFuncionarios, [projetoId]);
+      
+      return projeto;
     } catch (err) {
       console.error('Erro ao buscar resumo do projeto:', err);
       throw err;
     }
   }
   
-  // Dashboard - indicadores principais
-  static async getDashboardIndicadores() {
-    const sql = `SELECT 
-                  (SELECT COUNT(*) FROM projetos WHERE status = 'em_andamento') as projetos_andamento,
-                  (SELECT COUNT(*) FROM projetos WHERE status = 'concluido') as projetos_concluidos,
-                  (SELECT SUM(valor_receber) FROM projetos) as receita_total,
-                  (SELECT SUM(valor) FROM gastos) as gastos_totais,
-                  (SELECT COUNT(*) FROM funcionarios) as total_funcionarios,
-                  (SELECT 
-                    SUM(CASE 
-                      WHEN t.empreitada = 1 THEN t.valor_empreitada 
-                      ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
-                    END)
-                    FROM trabalhos t
-                    JOIN funcionarios f ON t.funcionario_id = f.id
-                  ) as total_mao_obra`;
-    
-    try {
-      return await db.promiseGet(sql, []);
-    } catch (err) {
-      console.error('Erro ao buscar indicadores do dashboard:', err);
-      // Retornar valores padrão em caso de erro para evitar quebra na interface
-      return {
-        projetos_andamento: 0,
-        projetos_concluidos: 0,
-        receita_total: 0,
-        gastos_totais: 0,
-        total_funcionarios: 0,
-        total_mao_obra: 0
-      };
-    }
-  }
-
-  // Método para formatação de dados para exportação CSV de lucratividade
+  // Formatar dados para exportação CSV - Lucratividade
   static formatarDadosCSVLucratividade(projetos) {
-    // Header do CSV
-    let headers = [
-      'ID', 
-      'Nome do Projeto', 
-      'Tipo', 
-      'Cliente', 
-      'Localidade', 
-      'Data Início', 
-      'Data Fim',
-      'Receita (R$)', 
-      'Gastos Materiais (R$)', 
-      'Custo Mão de Obra (R$)', 
-      'Lucro Líquido (R$)', 
-      'Margem (%)'
+    const headers = [
+      'ID', 'Nome do Projeto', 'Cliente', 'Tipo', 'Localidade',
+      'Data Início', 'Data Conclusão', 'Receita (R$)', 
+      'Gastos Materiais (R$)', 'Custo Mão de Obra (R$)', 'Lucro Líquido (R$)'
     ];
     
-    // Formatar os dados para CSV
-    let rows = projetos.map(p => {
-      const lucroLiquido = p.receita - p.gastos_materiais - p.custo_mao_obra;
-      const margem = ((lucroLiquido / p.receita) * 100).toFixed(2);
-      
-      // Formatação de datas
-      const dataInicio = new Date(p.data_inicio).toLocaleDateString('pt-BR');
-      const dataFim = p.data_fim_real ? new Date(p.data_fim_real).toLocaleDateString('pt-BR') : '-';
-      
-      return [
-        p.id,
-        p.nome,
-        p.tipo,
-        p.cliente_nome || '-',
-        p.localidade,
-        dataInicio,
-        dataFim,
-        p.receita.toFixed(2),
-        p.gastos_materiais.toFixed(2),
-        p.custo_mao_obra.toFixed(2),
-        lucroLiquido.toFixed(2),
-        margem
-      ];
-    });
-    
-    // Adicionar totais no final
-    const totalReceita = projetos.reduce((sum, p) => sum + p.receita, 0);
-    const totalGastos = projetos.reduce((sum, p) => sum + p.gastos_materiais, 0);
-    const totalMaoObra = projetos.reduce((sum, p) => sum + p.custo_mao_obra, 0);
-    const totalLucro = totalReceita - totalGastos - totalMaoObra;
-    const margemMedia = ((totalLucro / totalReceita) * 100).toFixed(2);
-    
-    rows.push([
-      '',
-      'TOTAL',
-      '',
-      '',
-      '',
-      '',
-      '',
-      totalReceita.toFixed(2),
-      totalGastos.toFixed(2),
-      totalMaoObra.toFixed(2),
-      totalLucro.toFixed(2),
-      margemMedia
+    const rows = projetos.map(p => [
+      p.id,
+      p.nome,
+      p.cliente_nome || 'N/A',
+      p.tipo,
+      p.localidade,
+      new Date(p.data_inicio).toLocaleDateString('pt-BR'),
+      p.data_fim_real ? new Date(p.data_fim_real).toLocaleDateString('pt-BR') : 'Em andamento',
+      p.receita.toFixed(2),
+      p.gastos_materiais.toFixed(2),
+      p.custo_mao_obra.toFixed(2),
+      p.lucro_liquido.toFixed(2)
     ]);
     
     return { headers, rows };
   }
-
-  // Método para formatação de dados para exportação CSV de pagamentos
-  static formatarDadosCSVPagamentos(pagamentos) {
-    // Header do CSV
-    let headers = [
-      'Nome', 
-      'Função', 
-      'Total de Dias Trabalhados', 
-      'Total de Horas Extras', 
-      'Valor Diária (R$)',
-      'Valor H. Extra (R$)',
-      'Total Diárias (R$)',
-      'Total H. Extras (R$)',
-      'Total Empreitadas (R$)',
-      'Total Bruto (R$)', 
-      'Adiantamentos (R$)',
-      'Valor a Pagar (R$)'
-    ];
+  
+  // Formatar dados para exportação CSV - Custos por Categoria
+  static formatarDadosCSVCustosPorCategoria(gastos) {
+    const headers = ['Categoria', 'Total (R$)', 'Quantidade de Registros'];
     
-    // Formatar os dados para CSV
-    let rows = pagamentos.map(p => {
-      const totalDiarias = (p.total_dias || 0) * (p.valor_diaria || 0);
-      const totalHorasExtras = (p.total_horas_extras || 0) * (p.valor_hora_extra || 0);
-      const saldoAPagar = p.total_bruto - p.total_adiantamentos;
-      
-      return [
-        p.nome,
-        p.funcao || '-',
-        p.total_dias || 0,
-        p.total_horas_extras || 0,
-        p.valor_diaria ? p.valor_diaria.toFixed(2) : '0.00',
-        p.valor_hora_extra ? p.valor_hora_extra.toFixed(2) : '0.00',
-        totalDiarias.toFixed(2),
-        totalHorasExtras.toFixed(2),
-        (p.total_empreitadas || 0).toFixed(2),
-        p.total_bruto.toFixed(2),
-        p.total_adiantamentos.toFixed(2),
-        saldoAPagar.toFixed(2)
-      ];
-    });
-    
-    // Adicionar totais no final
-    if (pagamentos.length > 0) {
-      const totalBruto = pagamentos.reduce((sum, p) => sum + p.total_bruto, 0);
-      const totalAdiantamentos = pagamentos.reduce((sum, p) => sum + p.total_adiantamentos, 0);
-      const totalSaldo = totalBruto - totalAdiantamentos;
-      
-      rows.push([
-        'TOTAL',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        totalBruto.toFixed(2),
-        totalAdiantamentos.toFixed(2),
-        totalSaldo.toFixed(2)
-      ]);
-    }
+    const rows = gastos.map(g => [
+      g.categoria,
+      g.total_valor.toFixed(2),
+      g.total_registros
+    ]);
     
     return { headers, rows };
   }
-
-  // Formata dados para exportação CSV do relatório de custos por categoria
-  static formatarDadosCSVCustosPorCategoria(gastos) {
-    // Header do CSV
-    let headers = [
-      'Categoria', 
-      'Valor Total (R$)', 
-      'Quantidade de Registros',
-      'Percentual (%)'
+  
+  // Formatar dados para exportação CSV - Pagamentos de Funcionários
+  static formatarDadosCSVPagamentos(pagamentos) {
+    const headers = [
+      'ID', 'Nome', 'Função', 'Dias Trabalhados', 'Horas Extras',
+      'Total Empreitadas (R$)', 'Valor Diárias (R$)', 
+      'Valor Horas Extras (R$)', 'Total Bruto (R$)',
+      'Total Adiantamentos (R$)', 'Valor a Receber (R$)'
     ];
     
-    // Calcular o valor total para percentuais
-    const valorTotal = gastos.reduce((sum, g) => sum + g.total_valor, 0);
-    
-    // Formatar os dados para CSV
-    let rows = gastos.map(g => {
-      const percentual = ((g.total_valor / valorTotal) * 100).toFixed(2);
-      
-      return [
-        g.categoria,
-        g.total_valor.toFixed(2),
-        g.total_registros,
-        percentual
-      ];
-    });
-    
-    // Adicionar total no final
-    rows.push([
-      'TOTAL',
-      valorTotal.toFixed(2),
-      gastos.reduce((sum, g) => sum + g.total_registros, 0),
-      '100.00'
+    const rows = pagamentos.map(p => [
+      p.id,
+      p.nome,
+      p.funcao,
+      p.total_dias,
+      p.total_horas_extras,
+      p.total_empreitadas.toFixed(2),
+      p.valor_diarias.toFixed(2),
+      p.valor_horas_extras.toFixed(2),
+      p.total_bruto.toFixed(2),
+      p.total_adiantamentos.toFixed(2),
+      p.valor_a_receber.toFixed(2)
     ]);
     
     return { headers, rows };

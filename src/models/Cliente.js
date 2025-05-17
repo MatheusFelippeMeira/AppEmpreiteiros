@@ -1,27 +1,25 @@
 const db = require('../config/database');
 
 class Cliente {
-  static getAll(callback) {
+  static async getAll() {
     const sql = `SELECT * FROM clientes ORDER BY nome`;
-    db.all(sql, [], callback);
+    return db.promiseAll(sql, []);
   }
 
-  static getById(id, callback) {
+  static async getById(id) {
     const sql = `SELECT * FROM clientes WHERE id = ?`;
-    db.get(sql, [id], callback);
+    return db.promiseGet(sql, [id]);
   }
 
-  static create(cliente, callback) {
+  static async create(cliente) {
     const { nome, contato, endereco, anotacoes } = cliente;
     const sql = `INSERT INTO clientes (nome, contato, endereco, anotacoes)
                 VALUES (?, ?, ?, ?)`;
     
-    db.run(sql, [nome, contato, endereco, anotacoes], function(err) {
-      callback(err, this.lastID);
-    });
+    return db.promiseRun(sql, [nome, contato, endereco, anotacoes]);
   }
 
-  static update(id, cliente, callback) {
+  static async update(id, cliente) {
     const { nome, contato, endereco, anotacoes } = cliente;
     const sql = `UPDATE clientes SET 
                 nome = ?, 
@@ -31,23 +29,23 @@ class Cliente {
                 data_atualizacao = CURRENT_TIMESTAMP
                 WHERE id = ?`;
     
-    db.run(sql, [nome, contato, endereco, anotacoes, id], callback);
+    return db.promiseRun(sql, [nome, contato, endereco, anotacoes, id]);
   }
 
-  static delete(id, callback) {
+  static async delete(id) {
     const sql = `DELETE FROM clientes WHERE id = ?`;
-    db.run(sql, [id], callback);
+    return db.promiseRun(sql, [id]);
   }
 
   // Métodos específicos para clientes
-  static getProjetos(id, callback) {
+  static async getProjetos(id) {
     const sql = `SELECT * FROM projetos WHERE cliente_id = ? ORDER BY data_inicio DESC`;
-    db.all(sql, [id], callback);
+    return db.promiseAll(sql, [id]);
   }
 
-  static getOrcamentos(id, callback) {
+  static async getOrcamentos(id) {
     const sql = `SELECT * FROM orcamentos WHERE cliente_id = ? ORDER BY data_criacao DESC`;
-    db.all(sql, [id], callback);
+    return db.promiseAll(sql, [id]);
   }
 }
 

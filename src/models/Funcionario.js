@@ -14,18 +14,34 @@ class Funcionario {
     // Obter total para cálculo de páginas
     const countSql = `SELECT COUNT(*) as total FROM funcionarios`;
     
-    const [rows, countResult] = await Promise.all([
-      db.promiseAll(sql, [limit, offset]),
-      db.promiseGet(countSql, [])
-    ]);
-    
-    return {
-      data: rows,
-      total: countResult.total,
-      page: page,
-      limit: limit,
-      totalPages: Math.ceil(countResult.total / limit)
-    };
+    try {
+      const [rows, countResult] = await Promise.all([
+        db.promiseAll(sql, [limit, offset]),
+        db.promiseGet(countSql, [])
+      ]);
+      
+      // Tratamento para quando countResult for null
+      const total = countResult ? countResult.total : 0;
+      
+      return {
+        data: rows || [],
+        total: total,
+        page: page,
+        limit: limit,
+        totalPages: Math.ceil(total / limit)
+      };
+    } catch (error) {
+      console.error('Erro ao buscar funcionários paginados:', error);
+      // Retornando um objeto válido mesmo em caso de erro
+      return {
+        data: [],
+        total: 0,
+        page: page,
+        limit: limit,
+        totalPages: 0,
+        error: error.message
+      };
+    }
   }
 
   static async getById(id) {

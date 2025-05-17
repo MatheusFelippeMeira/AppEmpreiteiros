@@ -116,6 +116,18 @@
                     </div>
                 </div>
                 
+                <!-- Mensagem caso não haja relatórios -->
+                <div class="row">
+                    <% let temRelatorio = false; %>
+                    <% /* Exemplo: se não houver cards, mostrar mensagem */ %>
+                    <% /* Aqui, como os cards são fixos, a mensagem só aparece se todos forem removidos */ %>
+                    <% if (!temRelatorio) { %>
+                        <div class="col-12 text-center text-muted py-4">
+                            <i class="fas fa-info-circle me-2"></i>Nenhum tipo de relatório disponível no momento.
+                        </div>
+                    <% } %>
+                </div>
+                
                 <!-- Filtros globais para relatórios -->
                 <div class="row mt-4">
                     <div class="col-md-12">

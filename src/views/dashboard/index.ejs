@@ -196,58 +196,65 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  if (typeof Chart !== 'undefined') {
     // Gráfico financeiro
     const ctx = document.getElementById('financialChart').getContext('2d');
     const financialChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Receita', 'Gastos', 'Mão de obra', 'Lucro'],
-            datasets: [{
-                label: 'Valores (R$)',
-                data: [
-                    <%= indicadores.receita_total || 0 %>,
-                    <%= indicadores.gastos_totais || 0 %>,
-                    <%= indicadores.total_mao_obra || 0 %>,
-                    <%= indicadores.lucro_liquido || 0 %>
-                ],
-                backgroundColor: [
-                    'rgba(40, 167, 69, 0.7)',
-                    'rgba(255, 193, 7, 0.7)',
-                    'rgba(0, 123, 255, 0.7)',
-                    'rgba(23, 162, 184, 0.7)'
-                ],
-                borderColor: [
-                    'rgba(40, 167, 69, 1)',
-                    'rgba(255, 193, 7, 1)',
-                    'rgba(0, 123, 255, 1)',
-                    'rgba(23, 162, 184, 1)'
-                ],
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return 'R$ ' + value.toLocaleString('pt-BR');
-                        }
-                    }
-                }
-            },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return 'R$ ' + context.raw.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-                        }
-                    }
-                }
+      type: 'bar',
+      data: {
+        labels: ['Receita', 'Gastos', 'Mão de obra', 'Lucro'],
+        datasets: [{
+          label: 'Valores (R$)',
+          data: <%- JSON.stringify([
+            indicadores.receita_total || 0,
+            indicadores.gastos_totais || 0,
+            indicadores.total_mao_obra || 0,
+            indicadores.lucro_liquido || 0
+          ]) %>,
+          backgroundColor: [
+            'rgba(40, 167, 69, 0.7)',
+            'rgba(255, 193, 7, 0.7)',
+            'rgba(0, 123, 255, 0.7)',
+            'rgba(23, 162, 184, 0.7)'
+          ],
+          borderColor: [
+            'rgba(40, 167, 69, 1)',
+            'rgba(255, 193, 7, 1)',
+            'rgba(0, 123, 255, 1)',
+            'rgba(23, 162, 184, 1)'
+          ],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return 'R$ ' + value.toLocaleString('pt-BR');
+              }
             }
+          }
+        },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return 'R$ ' + context.raw.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+              }
+            }
+          }
         }
+      });
+  } else {
+    console.error('Chart.js não está carregado. Verifique a conexão com internet.');
+    const chartContainers = document.querySelectorAll('.chart-container');
+    chartContainers.forEach(container => {
+      container.innerHTML = '<div class="alert alert-warning">Não foi possível carregar os gráficos. Verifique sua conexão.</div>';
     });
+  }
 });
 </script>

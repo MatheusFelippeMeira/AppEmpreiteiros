@@ -28,48 +28,41 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <% projetos.forEach(function(projeto) { %>
-                                    <tr>
-                                        <td><%= projeto.nome %></td>
-                                        <td><%= projeto.cliente_nome || 'N/A' %></td>
-                                        <td><%= projeto.localidade %></td>
-                                        <td>
-                                            <% if (projeto.status === 'em_andamento') { %>
-                                                <span class="badge bg-primary">Em andamento</span>
-                                            <% } else if (projeto.status === 'concluido') { %>
-                                                <span class="badge bg-success">Concluído</span>
-                                            <% } else if (projeto.status === 'cancelado') { %>
-                                                <span class="badge bg-danger">Cancelado</span>
-                                            <% } else { %>
-                                                <span class="badge bg-secondary">Indefinido</span>
-                                            <% } %>
-                                        </td>
-                                        <td><%= new Date(projeto.data_inicio).toLocaleDateString('pt-BR') %></td>
-                                        <td>
-                                            <% if (projeto.data_fim_prevista) { %>
-                                                <%= new Date(projeto.data_fim_prevista).toLocaleDateString('pt-BR') %>
-                                            <% } else { %>
-                                                N/A
-                                            <% } %>
-                                        </td>
-                                        <td>R$ <%= (projeto.valor_receber || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></td>
-                                        <td>
-                                            <div class="btn-group btn-group-sm">
-                                                <a href="/projetos/<%= projeto.id %>" class="btn btn-outline-primary" title="Ver detalhes">
+                                <% if (projetos && projetos.length > 0) { %>
+                                    <% projetos.forEach(function(projeto) { %>
+                                        <tr>
+                                            <td><%= projeto.nome %></td>
+                                            <td><%= projeto.cliente_nome || 'N/A' %></td>
+                                            <td><%= projeto.localidade || '-' %></td>
+                                            <td>
+                                                <% if (projeto.status === 'em_andamento') { %>
+                                                    <span class="badge bg-primary">Em andamento</span>
+                                                <% } else if (projeto.status === 'concluido') { %>
+                                                    <span class="badge bg-success">Concluído</span>
+                                                <% } else if (projeto.status === 'cancelado') { %>
+                                                    <span class="badge bg-danger">Cancelado</span>
+                                                <% } else { %>
+                                                    <span class="badge bg-secondary">Indefinido</span>
+                                                <% } %>
+                                            </td>
+                                            <td><%= projeto.data_inicio ? new Date(projeto.data_inicio).toLocaleDateString('pt-BR') : '-' %></td>
+                                            <td><%= projeto.data_fim_prevista ? new Date(projeto.data_fim_prevista).toLocaleDateString('pt-BR') : '-' %></td>
+                                            <td><%= projeto.valor ? 'R$ ' + projeto.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-' %></td>
+                                            <td>
+                                                <a href="/projetos/<%= projeto.id %>" class="btn btn-sm btn-outline-primary me-1" title="Ver Detalhes">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
-                                                <a href="/projetos/<%= projeto.id %>/editar" class="btn btn-outline-secondary" title="Editar">
+                                                <a href="/projetos/<%= projeto.id %>/editar" class="btn btn-sm btn-outline-secondary" title="Editar">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
-                                                <button type="button" class="btn btn-outline-danger" 
-                                                        onclick="confirmarExclusao('/projetos/<%= projeto.id %>/excluir')" 
-                                                        title="Excluir">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        </td>
+                                            </td>
+                                        </tr>
+                                    <% }); %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="8" class="text-center text-muted">Nenhum projeto cadastrado.</td>
                                     </tr>
-                                <% }); %>
+                                <% } %>
                             </tbody>
                         </table>
                     </div>
