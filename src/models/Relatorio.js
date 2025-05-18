@@ -236,6 +236,43 @@ class Relatorio {
     }
   }
   
+  // Obter indicadores para o Dashboard
+  static async getDashboardIndicadores() {
+    try {
+      // Consulta que retorna vários indicadores de uma vez para melhor performance
+      const sql = `
+        SELECT 
+          (SELECT COUNT(*) FROM projetos WHERE status = 'em_andamento') as projetos_andamento,
+          (SELECT COUNT(*) FROM funcionarios WHERE status = 'ativo') as total_funcionarios,
+          (SELECT SUM(valor_receber) FROM projetos) as receita_total,
+          (SELECT SUM(valor) FROM gastos) as gastos_totais,
+          (
+            SELECT SUM(
+              CASE 
+                WHEN t.empreitada = 1 THEN t.valor_empreitada 
+                ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
+              END
+            )
+            FROM trabalhos t
+            JOIN funcionarios f ON t.funcionario_id = f.id
+          ) as total_mao_obra
+      `;
+      
+      const indicadores = await db.promiseGet(sql);
+      return indicadores;
+    } catch (err) {
+      console.error('Erro ao buscar indicadores para o dashboard:', err);
+      // Retornar valores padrão em caso de falha
+      return {
+        projetos_andamento: 0,
+        total_funcionarios: 0,
+        receita_total: 0,
+        gastos_totais: 0,
+        total_mao_obra: 0
+      };
+    }
+  }
+  
   // Formatar dados para exportação CSV - Lucratividade
   static formatarDadosCSVLucratividade(projetos) {
     const headers = [

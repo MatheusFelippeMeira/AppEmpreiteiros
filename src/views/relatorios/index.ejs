@@ -172,20 +172,85 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Função para verificar se localStorage está disponível
+    function isStorageAvailable() {
+        try {
+            const test = '__storage_test__';
+            localStorage.setItem(test, test);
+            localStorage.removeItem(test);
+            return true;
+        } catch(e) {
+            console.warn('localStorage não está disponível:', e.message);
+            return false;
+        }
+    }
+
+    // Função para salvar preferências com fallback
+    function savePreference(key, value) {
+        if (isStorageAvailable()) {
+            try {
+                localStorage.setItem(key, value);
+            } catch(e) {
+                useCookieStorage(key, value);
+            }
+        } else {
+            useCookieStorage(key, value);
+        }
+    }
+    
+    // Use cookies como alternativa ao localStorage
+    function useCookieStorage(key, value) {
+        try {
+            document.cookie = key + "=" + encodeURIComponent(value) + ";path=/;max-age=31536000";
+        } catch(e) {
+            console.warn('Não foi possível salvar preferência:', e.message);
+        }
+    }
+
+    // Função para ler preferências com fallback
+    function getPreference(key, defaultValue) {
+        if (isStorageAvailable()) {
+            try {
+                return localStorage.getItem(key) || defaultValue;
+            } catch(e) {
+                return getCookieValue(key, defaultValue);
+            }
+        } else {
+            return getCookieValue(key, defaultValue);
+        }
+    }
+    
+    // Função para ler cookie
+    function getCookieValue(key, defaultValue) {
+        try {
+            const match = document.cookie.match('(^|;)\\s*' + key + '\\s*=\\s*([^;]+)');
+            return match ? decodeURIComponent(match.pop()) : defaultValue;
+        } catch(e) {
+            console.warn('Não foi possível ler preferência:', e.message);
+            return defaultValue;
+        }
+    }
+
     // Definir data atual e data inicial (30 dias atrás) como padrão
     const hoje = new Date();
     const dataInicio = new Date();
     dataInicio.setDate(hoje.getDate() - 30);
     
-    document.getElementById('dataInicio').value = dataInicio.toISOString().split('T')[0];
-    document.getElementById('dataFim').value = hoje.toISOString().split('T')[0];
+    document.getElementById('dataInicio').value = getPreference('relatoriosDataInicio', dataInicio.toISOString().split('T')[0]);
+    document.getElementById('dataFim').value = getPreference('relatoriosDataFim', hoje.toISOString().split('T')[0]);
+    
+    // Se formatoExportacao existe, defina seu valor
+    const formatoSelect = document.getElementById('formatoExportacao');
+    if (formatoSelect) {
+        formatoSelect.value = getPreference('relatoriosFormato', 'pdf');
+    }
     
     // Aplicar os filtros aos links de relatórios
     document.getElementById('filtrosForm').addEventListener('submit', function(event) {
         event.preventDefault();
         const dataInicio = document.getElementById('dataInicio').value;
         const dataFim = document.getElementById('dataFim').value;
-        const formato = document.getElementById('formatoExportacao').value;
+        const formato = formatoSelect ? formatoSelect.value : 'pdf';
         
         const links = document.querySelectorAll('.card-body a.btn-outline-primary');
         links.forEach(function(link) {
@@ -194,23 +259,12 @@ document.addEventListener('DOMContentLoaded', function() {
             link.setAttribute('href', novoHref);
         });
         
-        // Salvar preferências no localStorage
-        localStorage.setItem('relatoriosDataInicio', dataInicio);
-        localStorage.setItem('relatoriosDataFim', dataFim);
-        localStorage.setItem('relatoriosFormato', formato);
+        // Salvar preferências de forma segura
+        savePreference('relatoriosDataInicio', dataInicio);
+        savePreference('relatoriosDataFim', dataFim);
+        savePreference('relatoriosFormato', formato);
         
         alert('Filtros aplicados com sucesso!');
     });
-    
-    // Carregar preferências do localStorage
-    if (localStorage.getItem('relatoriosDataInicio')) {
-        document.getElementById('dataInicio').value = localStorage.getItem('relatoriosDataInicio');
-    }
-    if (localStorage.getItem('relatoriosDataFim')) {
-        document.getElementById('dataFim').value = localStorage.getItem('relatoriosDataFim');
-    }
-    if (localStorage.getItem('relatoriosFormato')) {
-        document.getElementById('formatoExportacao').value = localStorage.getItem('relatoriosFormato');
-    }
 });
 </script>
