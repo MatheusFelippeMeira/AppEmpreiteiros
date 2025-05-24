@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Funcionario = require('../models/Funcionario'); // Importar Model
-const db = require('../config/database'); // Importar conexão direta com o banco
-const { body, validationResult } = require('express-validator'); // Importar express-validator
+const db = require('../config/database');
 
 // Middleware para verificar se o usuário está autenticado
 const isAuthenticated = (req, res, next) => {
@@ -88,27 +87,22 @@ router.get('/novo', isAuthenticated, (req, res) => {
   });
 });
 
-// Validação para criação/edição
-const funcionarioValidationRules = () => {
-  return [
-    body('nome').notEmpty().withMessage('Nome é obrigatório').trim().escape(),
-    body('contato').optional({ checkFalsy: true }).trim().escape(),
-    body('funcao').optional({ checkFalsy: true }).trim().escape(),
-    body('valor_diaria').isNumeric().withMessage('Valor da diária deve ser um número').toFloat(),
-    body('valor_hora_extra').isNumeric().withMessage('Valor da hora extra deve ser um número').toFloat()
-  ];
-};
-
 // Criar novo funcionário
-router.post('/', isAuthenticated, funcionarioValidationRules(), async (req, res) => {
+router.post('/', isAuthenticated, async (req, res) => {
   try {
-    const errors = validationResult(req);
+    const { nome, contato, funcao, valor_diaria, valor_hora_extra, valor_empreitada, observacoes } = req.body;
     
-    if (!errors.isEmpty()) {
+    // Validação manual simples
+    const errors = [];
+    if (!nome) {
+      errors.push({ msg: 'Nome é obrigatório' });
+    }
+    
+    if (errors.length > 0) {
       return res.render('funcionarios/form', {
         title: 'Novo Funcionário',
         funcionario: req.body,
-        errors: errors.array(),
+        errors: errors,
         isNew: true
       });
     }
@@ -174,15 +168,19 @@ router.get('/:id/editar', isAuthenticated, async (req, res) => {
 });
 
 // Atualizar funcionário
-router.post('/:id', isAuthenticated, funcionarioValidationRules(), async (req, res) => {
+router.post('/:id', isAuthenticated, async (req, res) => {
   try {
-    const errors = validationResult(req);
+    // Validação manual simples
+    const errors = [];
+    if (!req.body.nome) {
+      errors.push({ msg: 'Nome é obrigatório' });
+    }
     
-    if (!errors.isEmpty()) {
+    if (errors.length > 0) {
       return res.render('funcionarios/form', {
         title: 'Editar Funcionário',
         funcionario: { ...req.body, id: req.params.id },
-        errors: errors.array(),
+        errors: errors,
         isNew: false
       });
     }
