@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Funcionario = require('../models/Funcionario'); // Importar Model
+const db = require('../config/database'); // Importar conexão direta com o banco
 const { body, validationResult } = require('express-validator'); // Importar express-validator
 
 // Middleware para verificar se o usuário está autenticado
@@ -18,25 +19,62 @@ router.get('/', isAuthenticated, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     
-    // Usar o novo método com paginação
-    const resultado = await Funcionario.getAllPaginated(page, limit);
-    
-    res.render('funcionarios/index', { 
-      title: 'Funcionários', 
-      funcionarios: resultado.data,
-      paginacao: {
-        page: resultado.page,
-        totalPages: resultado.totalPages,
-        total: resultado.total,
-        limit: resultado.limit
-      },
-      success_msg: req.flash('success_msg'),
-      error_msg: req.flash('error_msg')
-    });
+    // Tentar usar o método com paginação, mas com fallback para consulta direta
+    try {
+      const resultado = await Funcionario.getAllPaginated(page, limit);
+      
+      res.render('funcionarios/index', { 
+        title: 'Funcionários', 
+        funcionarios: resultado.data,
+        paginacao: {
+          page: resultado.page,
+          totalPages: resultado.totalPages,
+          total: resultado.total,
+          limit: resultado.limit
+        },
+        success_msg: req.flash('success_msg'),
+        error_msg: req.flash('error_msg')
+      });
+    } catch (innerErr) {
+      console.error('Erro no método paginado, tentando consulta direta:', innerErr);
+      
+      // Fallback: consulta direta ao banco
+      const funcionarios = await db.promiseAll(
+        'SELECT * FROM funcionarios ORDER BY nome LIMIT ? OFFSET ?',
+        [limit, (page - 1) * limit]
+      );
+      
+      const countResult = await db.promiseGet('SELECT COUNT(*) as total FROM funcionarios');
+      const total = countResult ? countResult.total : 0;
+      
+      res.render('funcionarios/index', { 
+        title: 'Funcionários', 
+        funcionarios: funcionarios || [],
+        paginacao: {
+          page: page,
+          totalPages: Math.ceil(total / limit),
+          total: total,
+          limit: limit
+        },
+        success_msg: req.flash('success_msg'),
+        error_msg: req.flash('error_msg')
+      });
+    }
   } catch (err) {
     console.error('Erro ao listar funcionários:', err);
-    req.flash('error_msg', 'Não foi possível carregar a lista de funcionários.');
-    res.redirect('/dashboard');
+    
+    // Em caso de erro, renderizar a página com lista vazia
+    res.render('funcionarios/index', { 
+      title: 'Funcionários', 
+      funcionarios: [],
+      paginacao: {
+        page: 1,
+        totalPages: 1,
+        total: 0,
+        limit: 10
+      },
+      error_msg: 'Não foi possível carregar a lista de funcionários. Tente novamente mais tarde.'
+    });
   }
 });
 

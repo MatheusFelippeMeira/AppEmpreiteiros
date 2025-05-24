@@ -97,6 +97,32 @@ app.use((req, res, next) => {
   next();
 });
 
+// Middleware para verificar conexão com o banco de dados
+app.use((req, res, next) => {
+  // Verificar se a rota é estática ou de autenticação
+  if (req.path.startsWith('/css') || 
+      req.path.startsWith('/js') || 
+      req.path.startsWith('/img') || 
+      req.path === '/health' ||
+      req.path === '/auth/login') {
+    return next();
+  }
+  
+  // Verificar conexão com o banco de dados
+  const db = require('./src/config/database');
+  db.get("SELECT 1 as test", [], (err, row) => {
+    if (err) {
+      console.error('Erro de conexão com o banco de dados:', err.message);
+      return res.status(503).render('error', {
+        title: 'Erro de Conexão',
+        message: 'Não foi possível conectar ao banco de dados. Tente novamente mais tarde.',
+        details: isDev ? err.message : undefined
+      });
+    }
+    next();
+  });
+});
+
 // Rotas
 app.use('/auth', authRoutes);
 app.use('/dashboard', authMiddleware, dashboardRoutes);
@@ -131,7 +157,8 @@ app.use((err, req, res, next) => {
   console.error('ERRO:', err);
   res.status(500).render('error', {
     title: 'Erro interno',
-    message: 'Ocorreu um erro no servidor. Por favor, tente novamente mais tarde.'
+    message: 'Ocorreu um erro no servidor. Por favor, tente novamente mais tarde.',
+    details: isDev ? err.message : undefined
   });
 });
 

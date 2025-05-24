@@ -1,39 +1,52 @@
-<%- /* Note: este arquivo usa o layout padrão definido no app.js */ %>
-
-<div class="container">
-  <div class="row justify-content-center">
-    <div class="col-md-8 mt-5">
-      <div class="card shadow border-0">
-        <div class="card-body text-center p-5">
-          <div class="mb-4">
-            <i class="fas fa-exclamation-circle text-danger" style="font-size: 5rem;"></i>
-          </div>
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-header bg-danger text-white">
+        <h4 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i><%= title || 'Erro' %></h4>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-danger">
+          <p class="mb-0"><%= message || 'Ocorreu um erro inesperado.' %></p>
           
-          <h2 class="card-title mb-3"><%= typeof title !== 'undefined' ? title : 'Erro' %></h2>
-          <p class="card-text mb-4"><%= typeof message !== 'undefined' ? message : 'Ocorreu um erro inesperado.' %></p>
-          
-          <% if (process.env.NODE_ENV === 'development' && typeof error !== 'undefined' && error && error.stack) { %>
-            <div class="text-start mt-4">
-              <div class="alert alert-secondary">
-                <h6>Detalhes do erro (visível apenas em ambiente de desenvolvimento):</h6>
-                <pre class="mb-0 text-danger"><%= error.stack %></pre>
-              </div>
-            </div>
+          <% if (typeof details !== 'undefined' && details) { %>
+            <hr>
+            <p class="mb-0 small"><strong>Detalhes técnicos:</strong> <%= details %></p>
           <% } %>
-          
-          <div class="mt-4">
-            <a href="/" class="btn btn-primary">
-              <i class="fas fa-home me-2"></i>
-              Voltar para o Dashboard
-            </a>
-            
-            <button onclick="window.history.back()" class="btn btn-outline-secondary ms-2">
-              <i class="fas fa-arrow-left me-2"></i>
-              Voltar
-            </button>
-          </div>
+        </div>
+        
+        <div class="mt-4">
+          <h5>O que você pode fazer:</h5>
+          <ul>
+            <li>Voltar para a <a href="/">página inicial</a></li>
+            <li>Tentar <a href="javascript:history.back()">voltar à página anterior</a></li>
+            <li>Verificar sua conexão com a internet</li>
+            <li>Tentar novamente mais tarde</li>
+          </ul>
+        </div>
+        
+        <div class="mt-4 text-center">
+          <a href="/" class="btn btn-primary">
+            <i class="fas fa-home me-2"></i>Ir para a página inicial
+          </a>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<script>
+  // Registrar erro no console para depuração
+  console.error('Erro na aplicação:', {
+    title: '<%= title || "Erro" %>',
+    message: '<%= message || "Ocorreu um erro inesperado." %>',
+    path: window.location.pathname
+  });
+  
+  // Tentar reconectar ao servidor após 5 segundos em caso de erro de conexão
+  if ('<%= message %>'.includes('conexão') || '<%= message %>'.includes('servidor')) {
+    setTimeout(() => {
+      console.log('Tentando reconectar...');
+      window.location.reload();
+    }, 5000);
+  }
+</script>
