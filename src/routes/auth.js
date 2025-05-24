@@ -8,14 +8,36 @@ const authUtils = require('../utils/authUtils');
 router.get('/login', (req, res) => {
   // Se já estiver autenticado, redireciona para dashboard
   if (req.session.user) {
+    console.log('[LOGIN] Usuário já autenticado, redirecionando para dashboard');
     return res.redirect('/dashboard');
   }
+  
+  console.log('[LOGIN] Página de login acessada');
+  console.log('[LOGIN] Erro na query string:', req.query.error || 'nenhum');
+  console.log('[LOGIN] Verificando configuração do banco:');
+  console.log('[LOGIN] - SUPABASE_URL configurado:', !!process.env.SUPABASE_URL);
+  console.log('[LOGIN] - SUPABASE_KEY configurado:', !!process.env.SUPABASE_KEY);
   
   // Script simplificado para login direto sem verificações complexas
   const loginScript = `
   <script>
     console.log('Login simplificado ativado');
-    // Deixando o formulário funcionar normalmente
+    // Verificar se há problemas de armazenamento local
+    try {
+      localStorage.setItem('test', 'test');
+      localStorage.removeItem('test');
+      console.log('LocalStorage está funcionando corretamente');
+    } catch (e) {
+      console.error('Erro ao acessar localStorage:', e);
+    }
+    
+    // Verificar cookies
+    try {
+      document.cookie = "testcookie=1; path=/";
+      console.log('Cookies parecem estar funcionando');
+    } catch (e) {
+      console.error('Erro ao definir cookie:', e);
+    }
   </script>
   `;
   
@@ -33,6 +55,10 @@ router.post('/login', async (req, res) => {
   try {
     const { email, senha } = req.body;
     console.log('Tentativa de login para:', email);
+    console.log('Verificando configuração do banco de dados:');
+    console.log('- Usando Supabase:', process.env.SUPABASE_URL ? 'Sim' : 'Não');
+    console.log('- URL configurada:', process.env.SUPABASE_URL ? 'Sim' : 'Não');
+    console.log('- KEY configurada:', process.env.SUPABASE_KEY ? 'Sim' : 'Não');
     
     // Forçar login do usuário existente no banco
     if (email === 'admin@exemplo.com' && senha === 'admin123') {
@@ -67,12 +93,37 @@ router.post('/login', async (req, res) => {
     // Se não for o usuário de teste, continuar com o fluxo normal
     console.log('Buscando usuário no banco de dados...');
     
+    // Verificar conexão com o banco antes de continuar
+    try {
+      const { testConnection } = require('../config/supabase');
+      const connected = await testConnection();
+      console.log('Teste de conexão com banco de dados:', connected ? 'SUCESSO' : 'FALHA');
+      
+      if (!connected) {
+        console.error('ERRO: Falha na conexão com o banco de dados');
+        return res.redirect('/auth/login?error=Erro de conexão com o banco de dados');
+      }
+    } catch (connErr) {
+      console.error('ERRO ao testar conexão:', connErr);
+    }
+    
     // Tentar buscar na tabela usuarios primeiro
-    let user = await db.promiseGet('SELECT * FROM usuarios WHERE email = ?', [email]);
+    let user;
+    try {
+      user = await db.promiseGet('SELECT * FROM usuarios WHERE email = ?', [email]);
+      console.log('Consulta à tabela usuarios:', user ? 'Encontrado' : 'Não encontrado');
+    } catch (dbErr) {
+      console.error('ERRO ao consultar tabela usuarios:', dbErr);
+    }
     
     // Se não encontrar, tentar na tabela users (para compatibilidade)
     if (!user) {
-      user = await db.promiseGet('SELECT * FROM users WHERE email = ?', [email]);
+      try {
+        user = await db.promiseGet('SELECT * FROM users WHERE email = ?', [email]);
+        console.log('Consulta à tabela users:', user ? 'Encontrado' : 'Não encontrado');
+      } catch (dbErr) {
+        console.error('ERRO ao consultar tabela users:', dbErr);
+      }
     }
     
     console.log('Resultado da busca:', user ? 'Usuário encontrado' : 'Usuário NÃO encontrado');

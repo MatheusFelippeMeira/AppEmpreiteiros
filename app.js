@@ -29,17 +29,27 @@ const { authMiddleware } = require('./src/utils/authUtils');
 
 // Testar conexão com Supabase se as credenciais estiverem disponíveis
 if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+  console.log('[STARTUP] Verificando conexão com Supabase na inicialização');
+  console.log('[STARTUP] SUPABASE_URL:', process.env.SUPABASE_URL ? process.env.SUPABASE_URL.substring(0, 15) + '...' : 'não configurado');
+  console.log('[STARTUP] SUPABASE_KEY:', process.env.SUPABASE_KEY ? 'configurado (primeiro 5 caracteres: ' + process.env.SUPABASE_KEY.substring(0, 5) + '...)' : 'não configurado');
+  
   testConnection()
     .then(connected => {
       if (connected) {
-        console.log('Usando Supabase como banco de dados');
+        console.log('[STARTUP] Usando Supabase como banco de dados - CONEXÃO BEM-SUCEDIDA');
       } else {
-        console.warn('Falha ao conectar com Supabase, usando SQLite como fallback');
+        console.warn('[STARTUP] FALHA ao conectar com Supabase, usando SQLite como fallback');
       }
     })
     .catch(err => {
-      console.error('Erro ao testar conexão com Supabase:', err);
+      console.error('[STARTUP] ERRO ao testar conexão com Supabase:', err.message);
+      console.error('[STARTUP] Detalhes do erro:', JSON.stringify(err));
+      if (err.stack) console.error('[STARTUP] Stack:', err.stack);
     });
+} else {
+  console.log('[STARTUP] Credenciais do Supabase não encontradas, usando SQLite');
+  console.log('[STARTUP] SUPABASE_URL configurado:', !!process.env.SUPABASE_URL);
+  console.log('[STARTUP] SUPABASE_KEY configurado:', !!process.env.SUPABASE_KEY);
 }
 
 // Importação de rotas
@@ -139,14 +149,21 @@ app.use((req, res, next) => {
     return next();
   }
   
+  // Log de diagnóstico para todas as requisições
+  console.log(`[DB-CHECK] Verificando conexão para rota: ${req.path}`);
+  console.log(`[DB-CHECK] Configuração: SUPABASE_URL=${process.env.SUPABASE_URL ? 'configurado' : 'não configurado'}, SUPABASE_KEY=${process.env.SUPABASE_KEY ? 'configurado' : 'não configurado'}`);
+  
   // Verificar conexão com o banco de dados
   if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
     // Usando Supabase
+    console.log('[DB-CHECK] Usando Supabase, testando conexão...');
     testConnection()
       .then(connected => {
         if (connected) {
+          console.log('[DB-CHECK] Conexão com Supabase bem-sucedida');
           next();
         } else {
+          console.error('[DB-CHECK] Falha na conexão com Supabase');
           return res.status(503).render('error', {
             title: 'Erro de Conexão',
             message: 'Não foi possível conectar ao banco de dados Supabase. Tente novamente mais tarde.',
@@ -155,7 +172,10 @@ app.use((req, res, next) => {
         }
       })
       .catch(err => {
-        console.error('Erro ao verificar conexão com Supabase:', err);
+        console.error('[DB-CHECK] Erro ao verificar conexão com Supabase:', err);
+        console.error('[DB-CHECK] Detalhes do erro:', err.message);
+        if (err.stack) console.error('[DB-CHECK] Stack:', err.stack);
+        
         return res.status(503).render('error', {
           title: 'Erro de Conexão',
           message: 'Não foi possível conectar ao banco de dados. Tente novamente mais tarde.',
@@ -164,15 +184,17 @@ app.use((req, res, next) => {
       });
   } else {
     // Usando SQLite
+    console.log('[DB-CHECK] Usando SQLite, testando conexão...');
     db.get("SELECT 1 as test", [], (err, row) => {
       if (err) {
-        console.error('Erro de conexão com o banco de dados:', err.message);
+        console.error('[DB-CHECK] Erro de conexão com o banco de dados SQLite:', err.message);
         return res.status(503).render('error', {
           title: 'Erro de Conexão',
           message: 'Não foi possível conectar ao banco de dados. Tente novamente mais tarde.',
           details: isDev ? err.message : undefined
         });
       }
+      console.log('[DB-CHECK] Conexão com SQLite bem-sucedida');
       next();
     });
   }

@@ -10,12 +10,28 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Função para testar conexão
 async function testConnection() {
   try {
+    console.log('Testando conexão com Supabase URL:', supabaseUrl ? 'URL configurada' : 'URL não configurada');
+    console.log('Testando conexão com Supabase KEY:', supabaseKey ? 'KEY configurada' : 'KEY não configurada');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('ERRO: Credenciais do Supabase não configuradas corretamente');
+      return false;
+    }
+    
     const { data, error } = await supabase.from('usuarios').select('count(*)', { count: 'exact' });
-    if (error) throw error;
-    console.log('Conexão com Supabase estabelecida com sucesso');
+    
+    if (error) {
+      console.error('ERRO na conexão com Supabase:', error.message);
+      console.error('Código do erro:', error.code);
+      console.error('Detalhes:', error.details);
+      throw error;
+    }
+    
+    console.log('Conexão com Supabase estabelecida com sucesso. Dados:', data);
     return true;
   } catch (err) {
-    console.error('Erro ao conectar com Supabase:', err);
+    console.error('Exceção ao conectar com Supabase:', err.message);
+    if (err.stack) console.error('Stack:', err.stack);
     return false;
   }
 }
