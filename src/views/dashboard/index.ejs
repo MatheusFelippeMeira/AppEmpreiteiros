@@ -24,7 +24,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h6 class="card-title">Projetos em andamento</h6>
-                        <h2 class="display-6 mb-0"><%= indicadores.projetos_andamento %></h2>
+                        <h2 class="display-6 mb-0"><%= typeof indicadores !== 'undefined' && indicadores ? indicadores.projetos_andamento || 0 : 0 %></h2>
                     </div>
                     <i class="fas fa-building fa-2x"></i>
                 </div>
@@ -38,7 +38,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h6 class="card-title">Receita Total</h6>
-                        <h2 class="display-6 mb-0">R$ <%= (indicadores.receita_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) %></h2>
+                        <h2 class="display-6 mb-0">R$ <%= typeof indicadores !== 'undefined' && indicadores && indicadores.receita_total ? indicadores.receita_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00' %></h2>
                     </div>
                     <i class="fas fa-money-bill-wave fa-2x"></i>
                 </div>
@@ -52,7 +52,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h6 class="card-title">Lucro Líquido</h6>
-                        <h2 class="display-6 mb-0">R$ <%= (indicadores.lucro_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) %></h2>
+                        <h2 class="display-6 mb-0">R$ <%= typeof indicadores !== 'undefined' && indicadores && indicadores.lucro_liquido ? indicadores.lucro_liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00' %></h2>
                     </div>
                     <i class="fas fa-chart-line fa-2x"></i>
                 </div>
@@ -66,7 +66,7 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h6 class="card-title">Funcionários</h6>
-                        <h2 class="display-6 mb-0"><%= indicadores.total_funcionarios %></h2>
+                        <h2 class="display-6 mb-0"><%= typeof indicadores !== 'undefined' && indicadores ? indicadores.total_funcionarios || 0 : 0 %></h2>
                     </div>
                     <i class="fas fa-hard-hat fa-2x"></i>
                 </div>
@@ -92,11 +92,11 @@
         <div class="card shadow-sm">
             <div class="card-header bg-light d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Sugestões Inteligentes</h5>
-                <span class="badge rounded-pill bg-primary"><%= (sugestoes || []).length %></span>
+                <span class="badge rounded-pill bg-primary"><%= (typeof sugestoes !== 'undefined' && sugestoes) ? sugestoes.length : 0 %></span>
             </div>
             <div class="card-body p-0">
                 <ul class="list-group list-group-flush">
-                    <% if (typeof sugestoes !== 'undefined' && sugestoes.length > 0) { %>
+                    <% if (typeof sugestoes !== 'undefined' && sugestoes && sugestoes.length > 0) { %>
                         <% sugestoes.forEach(function(sugestao) { %>
                             <li class="list-group-item">
                                 <% if (sugestao.tipo === 'alerta') { %>
@@ -143,22 +143,30 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <% if (typeof projetosAndamento !== 'undefined' && projetosAndamento.length > 0) { %>
+                            <% if (typeof projetosAndamento !== 'undefined' && projetosAndamento && projetosAndamento.length > 0) { %>
                                 <% projetosAndamento.slice(0, 5).forEach(function(projeto) { %>
                                     <tr>
                                         <td><%= projeto.nome %></td>
                                         <td><%= projeto.cliente_nome || 'N/A' %></td>
-                                        <td><%= new Date(projeto.data_inicio).toLocaleDateString('pt-BR') %></td>
-                                        <td><%= new Date(projeto.data_fim_prevista).toLocaleDateString('pt-BR') %></td>
+                                        <td><%= projeto.data_inicio ? new Date(projeto.data_inicio).toLocaleDateString('pt-BR') : 'N/A' %></td>
+                                        <td><%= projeto.data_fim_prevista ? new Date(projeto.data_fim_prevista).toLocaleDateString('pt-BR') : 'N/A' %></td>
                                         <td>
                                             <% 
-                                                const hoje = new Date();
-                                                const dataInicio = new Date(projeto.data_inicio);
-                                                const dataFim = new Date(projeto.data_fim_prevista);
-                                                const totalDias = (dataFim - dataInicio) / (1000 * 60 * 60 * 24);
-                                                const diasPassados = (hoje - dataInicio) / (1000 * 60 * 60 * 24);
-                                                let progresso = Math.min(Math.round((diasPassados / totalDias) * 100), 100);
-                                                if (isNaN(progresso)) progresso = 0;
+                                                let progresso = 0;
+                                                try {
+                                                    if (projeto.data_inicio && projeto.data_fim_prevista) {
+                                                        const hoje = new Date();
+                                                        const dataInicio = new Date(projeto.data_inicio);
+                                                        const dataFim = new Date(projeto.data_fim_prevista);
+                                                        const totalDias = (dataFim - dataInicio) / (1000 * 60 * 60 * 24);
+                                                        const diasPassados = (hoje - dataInicio) / (1000 * 60 * 60 * 24);
+                                                        progresso = Math.min(Math.round((diasPassados / totalDias) * 100), 100);
+                                                        if (isNaN(progresso)) progresso = 0;
+                                                    }
+                                                } catch (e) {
+                                                    console.error('Erro ao calcular progresso:', e);
+                                                    progresso = 0;
+                                                }
                                             %>
                                             <div class="progress">
                                                 <div class="progress-bar <%= progresso > 90 ? 'bg-danger' : progresso > 70 ? 'bg-warning' : 'bg-success' %>" 
@@ -196,65 +204,77 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  if (typeof Chart !== 'undefined') {
-    // Gráfico financeiro
-    const ctx = document.getElementById('financialChart').getContext('2d');
-    const financialChart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: ['Receita', 'Gastos', 'Mão de obra', 'Lucro'],
-        datasets: [{
-          label: 'Valores (R$)',
-          data: <%- JSON.stringify([
-            indicadores.receita_total || 0,
-            indicadores.gastos_totais || 0,
-            indicadores.total_mao_obra || 0,
-            indicadores.lucro_liquido || 0
-          ]) %>,
-          backgroundColor: [
-            'rgba(40, 167, 69, 0.7)',
-            'rgba(255, 193, 7, 0.7)',
-            'rgba(0, 123, 255, 0.7)',
-            'rgba(23, 162, 184, 0.7)'
-          ],
-          borderColor: [
-            'rgba(40, 167, 69, 1)',
-            'rgba(255, 193, 7, 1)',
-            'rgba(0, 123, 255, 1)',
-            'rgba(23, 162, 184, 1)'
-          ],
-          borderWidth: 1
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: {
-              callback: function(value) {
-                return 'R$ ' + value.toLocaleString('pt-BR');
+  try {
+    if (typeof Chart !== 'undefined') {
+      // Dados para o gráfico
+      const chartData = [0, 0, 0, 0]; // Valores padrão
+      
+      // Tentar obter os valores reais se disponíveis
+      if (typeof indicadores !== 'undefined' && indicadores) {
+        chartData[0] = indicadores.receita_total || 0;
+        chartData[1] = indicadores.gastos_totais || 0;
+        chartData[2] = indicadores.total_mao_obra || 0;
+        chartData[3] = indicadores.lucro_liquido || 0;
+      }
+      
+      // Gráfico financeiro
+      const ctx = document.getElementById('financialChart').getContext('2d');
+      const financialChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Receita', 'Gastos', 'Mão de obra', 'Lucro'],
+          datasets: [{
+            label: 'Valores (R$)',
+            data: chartData,
+            backgroundColor: [
+              'rgba(40, 167, 69, 0.7)',
+              'rgba(255, 193, 7, 0.7)',
+              'rgba(0, 123, 255, 0.7)',
+              'rgba(23, 162, 184, 0.7)'
+            ],
+            borderColor: [
+              'rgba(40, 167, 69, 1)',
+              'rgba(255, 193, 7, 1)',
+              'rgba(0, 123, 255, 1)',
+              'rgba(23, 162, 184, 1)'
+            ],
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return 'R$ ' + value.toLocaleString('pt-BR');
+                }
               }
             }
-          }
-        },
-        plugins: {
-          tooltip: {
-            callbacks: {
-              label: function(context) {
-                return 'R$ ' + context.raw.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return 'R$ ' + context.raw.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                }
               }
             }
           }
         }
       });
-  } else {
-    console.error('Chart.js não está carregado. Verifique a conexão com internet.');
-    const chartContainers = document.querySelectorAll('.chart-container');
-    chartContainers.forEach(container => {
-      container.innerHTML = '<div class="alert alert-warning">Não foi possível carregar os gráficos. Verifique sua conexão.</div>';
-    });
+    } else {
+      console.error('Chart.js não está carregado. Verifique a conexão com internet.');
+      const chartContainers = document.querySelectorAll('.chart-container');
+      chartContainers.forEach(container => {
+        container.innerHTML = '<div class="alert alert-warning">Não foi possível carregar os gráficos. Verifique sua conexão.</div>';
+      });
+    }
+  } catch (error) {
+    console.error('Erro ao inicializar gráfico:', error);
+    document.getElementById('financialChart').outerHTML = '<div class="alert alert-warning">Erro ao carregar o gráfico: ' + error.message + '</div>';
   }
 });
 </script>
