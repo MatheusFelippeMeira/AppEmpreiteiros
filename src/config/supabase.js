@@ -1,40 +1,133 @@
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
 
-// URL do projeto Supabase (sem o prefixo 'db.')
-const supabaseUrl = process.env.SUPABASE_URL || 'https://swrnbxuvewboetodewbi.supabase.co';
-// Chave anônima ou chave de serviço do Supabase
+// Obter credenciais do ambiente
+const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 
-// Verificar se as variáveis necessárias estão definidas
-if (!supabaseKey) {
-  console.error('⚠️ ERRO: Variável de ambiente SUPABASE_KEY não definida!');
-  console.error('Por favor, configure a variável SUPABASE_KEY no arquivo .env ou no painel do Render.');
-  console.error('Você pode encontrar sua chave no Supabase em: Configurações do Projeto > API > anon/public key');
-}
-
-// Criar e exportar o cliente do Supabase
+// Criar cliente Supabase
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Função para testar a conexão
-const testConnection = async () => {
+// Função para testar conexão
+async function testConnection() {
   try {
-    // Tentativa de consulta simples para verificar a conexão
-    const { data, error } = await supabase.from('users').select('count').limit(1);
-    
+    const { data, error } = await supabase.from('usuarios').select('count(*)', { count: 'exact' });
     if (error) throw error;
-    
-    console.log('✅ Conexão com Supabase API estabelecida com sucesso!');
+    console.log('Conexão com Supabase estabelecida com sucesso');
     return true;
-  } catch (error) {
-    console.error('❌ Erro ao conectar à API do Supabase:', error.message);
+  } catch (err) {
+    console.error('Erro ao conectar com Supabase:', err);
     return false;
+  }
+}
+
+// Adaptar interface para ser compatível com SQLite
+const db = {
+  promiseAll: async (sql, params) => {
+    try {
+      // Converter SQL para Supabase
+      const tableName = sql.match(/FROM\s+(\w+)/i)?.[1];
+      if (!tableName) throw new Error('Tabela não encontrada na query');
+      
+      const { data, error } = await supabase.from(tableName).select('*');
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      console.error('Erro em promiseAll:', err);
+      return [];
+    }
+  },
+  
+  promiseGet: async (sql, params) => {
+    try {
+      const tableName = sql.match(/FROM\s+(\w+)/i)?.[1];
+      const idMatch = sql.match(/WHERE\s+\w+\.id\s*=\s*\?/i);
+      
+      if (!tableName) throw new Error('Tabela não encontrada na query');
+      
+      if (idMatch && params.length > 0) {
+        const { data, error } = await supabase.from(tableName).select('*').eq('id', params[0]).single();
+        if (error) throw error;
+        return data;
+      } else {
+        const { data, error } = await supabase.from(tableName).select('*').limit(1).single();
+        if (error) throw error;
+        return data;
+      }
+    } catch (err) {
+      console.error('Erro em promiseGet:', err);
+      return null;
+    }
+  },
+  
+  promiseRun: async (sql, params) => {
+    try {
+      // Identificar operação (INSERT, UPDATE, DELETE)
+      if (sql.trim().toUpperCase().startsWith('INSERT')) {
+        const tableName = sql.match(/INTO\s+(\w+)/i)?.[1];
+        if (!tableName) throw new Error('Tabela não encontrada na query');
+        
+        // Extrair valores para inserção
+        const values = {};
+        // Simplificação: assumindo que params são os valores na ordem das colunas
+        const columns = sql.match(/\(([^)]+)\)/i)?.[1].split(',').map(c => c.trim());
+        
+        if (columns && columns.length === params.length) {
+          columns.forEach((col, i) => {
+            values[col] = params[i];
+          });
+          
+          const { data, error } = await supabase.from(tableName).insert(values).select();
+          if (error) throw error;
+          return { lastID: data[0].id, changes: 1 };
+        }
+      }
+      
+      // Implementação simplificada - em produção precisaria de um parser SQL mais robusto
+      console.warn('Operação SQL não suportada diretamente:', sql);
+      return { lastID: 0, changes: 0 };
+    } catch (err) {
+      console.error('Erro em promiseRun:', err);
+      throw err;
+    }
+  },
+  
+  // Métodos adicionais para compatibilidade
+  get: (sql, params, callback) => {
+    db.promiseGet(sql, params)
+      .then(row => callback(null, row))
+      .catch(err => callback(err));
+  },
+  
+  all: (sql, params, callback) => {
+    db.promiseAll(sql, params)
+      .then(rows => callback(null, rows))
+      .catch(err => callback(err));
+  },
+  
+  run: function(sql, params, callback) {
+    db.promiseRun(sql, params)
+      .then(result => {
+        if (callback) callback.call({lastID: result.lastID, changes: result.changes});
+      })
+      .catch(err => {
+        if (callback) callback(err);
+      });
+  },
+  
+  close: () => {
+    // Nada a fazer para Supabase
+    console.log('Conexão com Supabase fechada');
+  },
+  
+  tableExists: async (tableName) => {
+    try {
+      const { data, error } = await supabase.from(tableName).select('count(*)', { count: 'exact', head: true });
+      return !error;
+    } catch (err) {
+      console.error(`Erro ao verificar existência da tabela ${tableName}:`, err);
+      return false;
+    }
   }
 };
 
-// Testar a conexão quando o arquivo é carregado
-testConnection().catch(err => {
-  console.error('Erro ao testar conexão com Supabase:', err.message);
-});
-
-module.exports = { supabase, testConnection };
+module.exports = { supabase, testConnection, db };

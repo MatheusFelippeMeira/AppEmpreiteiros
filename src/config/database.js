@@ -2,6 +2,14 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
+// Verificar se devemos usar Supabase em vez de SQLite
+if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+  console.log('Usando Supabase como banco de dados');
+  // Usar a conexão Supabase em vez de SQLite
+  module.exports = require('./supabase').db;
+  return; // Interrompe a execução do restante do arquivo
+}
+
 // Definir caminho do banco de dados
 const dbPath = process.env.DB_PATH || path.join(__dirname, '../../database.sqlite');
 

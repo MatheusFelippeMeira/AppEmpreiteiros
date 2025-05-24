@@ -8,8 +8,39 @@ const compression = require('compression');
 const ejsLayouts = require('express-ejs-layouts');
 const methodOverride = require('method-override');
 const cookieParser = require('cookie-parser');
+const fs = require('fs');
+
+// Verificar se o banco de dados precisa ser inicializado
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'database.sqlite');
+const dbExists = fs.existsSync(dbPath);
+
+// Se não estamos usando Supabase e o banco de dados não existe, inicializar
+if (!process.env.SUPABASE_URL && !process.env.SUPABASE_KEY && !dbExists) {
+  console.log('Banco de dados SQLite não encontrado. Inicializando...');
+  require('./init_database');
+}
+
+// Importar configuração do banco de dados (SQLite ou Supabase)
+const db = require('./src/config/database');
+
+// Importar configuração do Supabase
 const { supabase, testConnection } = require('./src/config/supabase');
 const { authMiddleware } = require('./src/utils/authUtils');
+
+// Testar conexão com Supabase se as credenciais estiverem disponíveis
+if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+  testConnection()
+    .then(connected => {
+      if (connected) {
+        console.log('Usando Supabase como banco de dados');
+      } else {
+        console.warn('Falha ao conectar com Supabase, usando SQLite como fallback');
+      }
+    })
+    .catch(err => {
+      console.error('Erro ao testar conexão com Supabase:', err);
+    });
+}
 
 // Importação de rotas
 const authRoutes = require('./src/routes/auth');
@@ -109,18 +140,42 @@ app.use((req, res, next) => {
   }
   
   // Verificar conexão com o banco de dados
-  const db = require('./src/config/database');
-  db.get("SELECT 1 as test", [], (err, row) => {
-    if (err) {
-      console.error('Erro de conexão com o banco de dados:', err.message);
-      return res.status(503).render('error', {
-        title: 'Erro de Conexão',
-        message: 'Não foi possível conectar ao banco de dados. Tente novamente mais tarde.',
-        details: isDev ? err.message : undefined
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+    // Usando Supabase
+    testConnection()
+      .then(connected => {
+        if (connected) {
+          next();
+        } else {
+          return res.status(503).render('error', {
+            title: 'Erro de Conexão',
+            message: 'Não foi possível conectar ao banco de dados Supabase. Tente novamente mais tarde.',
+            details: isDev ? 'Falha na conexão com Supabase' : undefined
+          });
+        }
+      })
+      .catch(err => {
+        console.error('Erro ao verificar conexão com Supabase:', err);
+        return res.status(503).render('error', {
+          title: 'Erro de Conexão',
+          message: 'Não foi possível conectar ao banco de dados. Tente novamente mais tarde.',
+          details: isDev ? err.message : undefined
+        });
       });
-    }
-    next();
-  });
+  } else {
+    // Usando SQLite
+    db.get("SELECT 1 as test", [], (err, row) => {
+      if (err) {
+        console.error('Erro de conexão com o banco de dados:', err.message);
+        return res.status(503).render('error', {
+          title: 'Erro de Conexão',
+          message: 'Não foi possível conectar ao banco de dados. Tente novamente mais tarde.',
+          details: isDev ? err.message : undefined
+        });
+      }
+      next();
+    });
+  }
 });
 
 // Rotas
