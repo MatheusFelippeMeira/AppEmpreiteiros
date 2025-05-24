@@ -24,21 +24,21 @@ class Orcamento {
   }
 
   static async create(orcamento) {
-    const { cliente_id, projeto_id, titulo, descricao, valor_total, status } = orcamento;
+    const { cliente_id, projeto_id, titulo, descricao, valor_total, tipo_obra, localidade, status } = orcamento;
     const sql = `
       INSERT INTO orcamentos 
-        (cliente_id, projeto_id, titulo, descricao, valor_total, status)
-      VALUES (?, ?, ?, ?, ?, ?)
+        (cliente_id, projeto_id, titulo, descricao, valor_total, tipo_obra, localidade, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     return db.promiseRun(
       sql, 
-      [cliente_id, projeto_id, titulo, descricao, valor_total, status || 'pendente']
+      [cliente_id, projeto_id, titulo, descricao, valor_total, tipo_obra, localidade, status || 'pendente']
     );
   }
 
   static async update(id, orcamento) {
-    const { cliente_id, projeto_id, titulo, descricao, valor_total, status } = orcamento;
+    const { cliente_id, projeto_id, titulo, descricao, valor_total, tipo_obra, localidade, status } = orcamento;
     const sql = `
       UPDATE orcamentos SET
         cliente_id = ?,
@@ -46,14 +46,16 @@ class Orcamento {
         titulo = ?,
         descricao = ?,
         valor_total = ?,
+        tipo_obra = ?,
+        localidade = ?,
         status = ?,
-        updated_at = CURRENT_TIMESTAMP
+        data_atualizacao = CURRENT_TIMESTAMP
       WHERE id = ?
     `;
     
     return db.promiseRun(
       sql, 
-      [cliente_id, projeto_id, titulo, descricao, valor_total, status, id]
+      [cliente_id, projeto_id, titulo, descricao, valor_total, tipo_obra, localidade, status, id]
     );
   }
 

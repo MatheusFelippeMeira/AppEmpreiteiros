@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= orcamento.titulo %> - Orçamento</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #0d6efd;
+      padding-bottom: 10px;
+    }
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      color: #0d6efd;
+    }
+    .orcamento-info {
+      margin-bottom: 20px;
+    }
+    .orcamento-info h2 {
+      color: #0d6efd;
+      margin-bottom: 10px;
+    }
+    .info-block {
+      display: flex;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .info-item {
+      width: 50%;
+      margin-bottom: 10px;
+    }
+    .info-label {
+      font-weight: bold;
+      margin-right: 5px;
+    }
+    .section {
+      margin-bottom: 30px;
+    }
+    .section h3 {
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 5px;
+      color: #0d6efd;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    table th, table td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    table th {
+      background-color: #f2f2f2;
+    }
+    .total-section {
+      margin-top: 30px;
+      border-top: 1px solid #ddd;
+      padding-top: 10px;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 5px;
+    }
+    .total-label {
+      font-weight: bold;
+    }
+    .grand-total {
+      font-size: 18px;
+      font-weight: bold;
+      color: #0d6efd;
+      margin-top: 10px;
+      text-align: right;
+    }
+    .footer {
+      margin-top: 50px;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+      border-top: 1px solid #ddd;
+      padding-top: 20px;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    .status-pendente {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+    .status-aprovado {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .status-recusado {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .signature {
+      margin-top: 50px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .signature-line {
+      width: 45%;
+      border-top: 1px solid #333;
+      padding-top: 5px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">App Empreiteiros</div>
+    <div>Orçamento #<%= orcamento.id %></div>
+  </div>
+  
+  <div class="orcamento-info">
+    <h2><%= orcamento.titulo %></h2>
+    
+    <div class="info-block">
+      <div class="info-item">
+        <span class="info-label">Cliente:</span>
+        <span><%= orcamento.cliente_nome || 'Não especificado' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Data:</span>
+        <span><%= orcamento.data_criacao ? new Date(orcamento.data_criacao).toLocaleDateString('pt-BR') : 'Não especificado' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Tipo de Obra:</span>
+        <span><%= orcamento.tipo_obra || 'Não especificado' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Localidade:</span>
+        <span><%= orcamento.localidade || 'Não especificado' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Status:</span>
+        <span class="status-badge status-<%= orcamento.status || 'pendente' %>">
+          <%= orcamento.status === 'pendente' ? 'Pendente' : 
+             orcamento.status === 'aprovado' ? 'Aprovado' : 
+             orcamento.status === 'recusado' ? 'Recusado' : 'Indefinido' %>
+        </span>
+      </div>
+      <% if (orcamento.projeto_nome) { %>
+      <div class="info-item">
+        <span class="info-label">Projeto:</span>
+        <span><%= orcamento.projeto_nome %></span>
+      </div>
+      <% } %>
+    </div>
+    
+    <% if (orcamento.descricao) { %>
+    <div class="section">
+      <h3>Descrição</h3>
+      <p><%= orcamento.descricao %></p>
+    </div>
+    <% } %>
+  </div>
+  
+  <% if (orcamento.itens && (orcamento.itens.materiais.length > 0 || orcamento.itens.mao_obra.length > 0)) { %>
+    <!-- Orçamento detalhado com itens -->
+    
+    <% if (orcamento.itens.materiais.length > 0) { %>
+    <div class="section">
+      <h3>Materiais</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Descrição</th>
+            <th>Quantidade</th>
+            <th>Valor Unitário</th>
+            <th>Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% 
+          let totalMateriais = 0;
+          orcamento.itens.materiais.forEach(function(item) { 
+            const subtotal = item.quantidade * item.valor_unitario;
+            totalMateriais += subtotal;
+          %>
+            <tr>
+              <td><%= item.descricao %></td>
+              <td><%= item.quantidade %></td>
+              <td>R$ <%= parseFloat(item.valor_unitario).toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></td>
+              <td>R$ <%= subtotal.toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></td>
+            </tr>
+          <% }); %>
+          <tr>
+            <td colspan="3" style="text-align: right;"><strong>Total Materiais:</strong></td>
+            <td><strong>R$ <%= totalMateriais.toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <% } %>
+    
+    <% if (orcamento.itens.mao_obra.length > 0) { %>
+    <div class="section">
+      <h3>Mão de Obra</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Descrição</th>
+            <th>Quantidade</th>
+            <th>Valor Unitário</th>
+            <th>Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% 
+          let totalMaoObra = 0;
+          orcamento.itens.mao_obra.forEach(function(item) { 
+            const subtotal = item.quantidade * item.valor_unitario;
+            totalMaoObra += subtotal;
+          %>
+            <tr>
+              <td><%= item.descricao %></td>
+              <td><%= item.quantidade %></td>
+              <td>R$ <%= parseFloat(item.valor_unitario).toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></td>
+              <td>R$ <%= subtotal.toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></td>
+            </tr>
+          <% }); %>
+          <tr>
+            <td colspan="3" style="text-align: right;"><strong>Total Mão de Obra:</strong></td>
+            <td><strong>R$ <%= totalMaoObra.toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <% } %>
+    
+    <div class="total-section">
+      <% 
+      const subtotal = (orcamento.itens.materiais.reduce((sum, item) => sum + (item.quantidade * item.valor_unitario), 0)) + 
+                      (orcamento.itens.mao_obra.reduce((sum, item) => sum + (item.quantidade * item.valor_unitario), 0));
+      const margemLucro = orcamento.margem_lucro || 20;
+      const valorLucro = subtotal * (margemLucro / 100);
+      const total = subtotal + valorLucro;
+      %>
+      
+      <div class="total-row">
+        <span class="total-label">Subtotal:</span>
+        <span>R$ <%= subtotal.toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></span>
+      </div>
+      <div class="total-row">
+        <span class="total-label">Margem de Lucro (<%= margemLucro %>%):</span>
+        <span>R$ <%= valorLucro.toLocaleString('pt-BR', {minimumFractionDigits: 2}) %></span>
+      </div>
+      <div class="grand-total">
+        Valor Total: R$ <%= total.toLocaleString('pt-BR', {minimumFractionDigits: 2}) %>
+      </div>
+    </div>
+  <% } else { %>
+    <!-- Orçamento simples -->
+    <div class="total-section">
+      <div class="grand-total">
+        Valor Total: R$ <%= parseFloat(orcamento.valor_total).toLocaleString('pt-BR', {minimumFractionDigits: 2}) %>
+      </div>
+    </div>
+  <% } %>
+  
+  <div class="signature">
+    <div class="signature-line">
+      Assinatura do Cliente
+    </div>
+    <div class="signature-line">
+      Assinatura do Responsável
+    </div>
+  </div>
+  
+  <div class="footer">
+    <p>Este orçamento é válido por 30 dias a partir da data de emissão.</p>
+    <p>App Empreiteiros - Sistema de Gestão para Empreiteiros</p>
+  </div>
+</body>
+</html>

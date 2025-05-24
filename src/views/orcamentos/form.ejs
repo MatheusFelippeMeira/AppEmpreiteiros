@@ -3,13 +3,13 @@
   <div class="col-md-8">
     <div class="card shadow-sm">
       <div class="card-header bg-primary text-white">
-        <h4 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>Novo Orçamento</h4>
+        <h4 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i><%= typeof orcamento.id !== 'undefined' ? 'Editar' : 'Novo' %> Orçamento</h4>
       </div>
       <div class="card-body">
         <% if (typeof error !== 'undefined' && error) { %>
           <div class="alert alert-danger"><%= error %></div>
         <% } %>
-        <form action="/orcamentos" method="POST">
+        <form action="/orcamentos<%= orcamento.id ? '/' + orcamento.id : '' %>" method="POST">
           <div class="mb-3">
             <label for="cliente_id" class="form-label">Cliente</label>
             <select class="form-select" id="cliente_id" name="cliente_id" required>
@@ -31,8 +31,8 @@
             <textarea class="form-control" id="descricao" name="descricao" rows="2" required><%= orcamento.descricao || '' %></textarea>
           </div>
           <div class="mb-3">
-            <label for="valor_estimado" class="form-label">Valor Estimado</label>
-            <input type="number" step="0.01" class="form-control" id="valor_estimado" name="valor_estimado" value="<%= orcamento.valor_estimado || '' %>" required>
+            <label for="valor_total" class="form-label">Valor Total</label>
+            <input type="number" step="0.01" class="form-control" id="valor_total" name="valor_total" value="<%= orcamento.valor_total || orcamento.valor_estimado || '' %>" required>
           </div>
           <div class="mb-3">
             <label for="tipo_obra" class="form-label">Tipo de Obra</label>
@@ -42,16 +42,29 @@
             <label for="localidade" class="form-label">Localidade</label>
             <input type="text" class="form-control" id="localidade" name="localidade" value="<%= orcamento.localidade || '' %>">
           </div>
-
-
-
-
-
-
-
-</div>  </div>    </div>      </div>        </form>          <a href="/orcamentos" class="btn btn-secondary ms-2">Cancelar</a>          <button type="submit" class="btn btn-primary">Salvar Orçamento</button>          </div>
-          <button type="submit" class="btn btn-primary">Salvar Orçamento</button>
-          <a href="/orcamentos" class="btn btn-secondary ms-2">Cancelar</a>
+          <div class="mb-3">
+            <label for="projeto_id" class="form-label">Projeto (opcional)</label>
+            <select class="form-select" id="projeto_id" name="projeto_id">
+              <option value="">Selecione um projeto</option>
+              <% if (typeof projetos !== 'undefined' && projetos && projetos.length > 0) { %>
+                <% projetos.forEach(function(projeto) { %>
+                  <option value="<%= projeto.id %>" <%= orcamento.projeto_id == projeto.id ? 'selected' : '' %>><%= projeto.nome %></option>
+                <% }); %>
+              <% } %>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="status" class="form-label">Status</label>
+            <select class="form-select" id="status" name="status">
+              <option value="pendente" <%= (orcamento.status === 'pendente' || !orcamento.status) ? 'selected' : '' %>>Pendente</option>
+              <option value="aprovado" <%= orcamento.status === 'aprovado' ? 'selected' : '' %>>Aprovado</option>
+              <option value="recusado" <%= orcamento.status === 'recusado' ? 'selected' : '' %>>Recusado</option>
+            </select>
+          </div>
+          <div class="d-flex justify-content-between">
+            <button type="submit" class="btn btn-primary">Salvar Orçamento</button>
+            <a href="/orcamentos" class="btn btn-secondary">Cancelar</a>
+          </div>
         </form>
       </div>
     </div>

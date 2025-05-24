@@ -13,61 +13,49 @@ class IA {
   static async analisarProjeto(projetoId) {
     try {
       // Obter dados do projeto
-      const projeto = await new Promise((resolve, reject) => {
-        db.get(
-          `SELECT 
-            p.*, 
-            c.nome as cliente_nome,
-            (SELECT SUM(valor) FROM gastos WHERE projeto_id = ?) as total_gastos,
-            (
-              SELECT SUM(
-                CASE 
-                  WHEN t.empreitada = 1 THEN t.valor_empreitada 
-                  ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
-                END
-              )
-              FROM trabalhos t
-              JOIN funcionarios f ON t.funcionario_id = f.id
-              WHERE t.projeto_id = ?
-            ) as custo_mao_obra,
-            JULIANDAY(COALESCE(p.data_fim_real, CURRENT_DATE)) - JULIANDAY(p.data_inicio) as dias_duracao,
-            JULIANDAY(p.data_fim_prevista) - JULIANDAY(p.data_inicio) as dias_previstos
-          FROM projetos p
-          LEFT JOIN clientes c ON p.cliente_id = c.id
-          WHERE p.id = ?`,
-          [projetoId, projetoId, projetoId],
-          (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-          }
-        );
-      });
+      const projeto = await db.promiseGet(
+        `SELECT 
+          p.*, 
+          c.nome as cliente_nome,
+          (SELECT SUM(valor) FROM gastos WHERE projeto_id = ?) as total_gastos,
+          (
+            SELECT SUM(
+              CASE 
+                WHEN t.empreitada = 1 THEN t.valor_empreitada 
+                ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
+              END
+            )
+            FROM trabalhos t
+            JOIN funcionarios f ON t.funcionario_id = f.id
+            WHERE t.projeto_id = ?
+          ) as custo_mao_obra,
+          (strftime('%s', COALESCE(p.data_fim_real, CURRENT_DATE)) - strftime('%s', p.data_inicio)) / 86400.0 as dias_duracao,
+          (strftime('%s', p.data_fim_prevista) - strftime('%s', p.data_inicio)) / 86400.0 as dias_previstos
+        FROM projetos p
+        LEFT JOIN clientes c ON p.cliente_id = c.id
+        WHERE p.id = ?`,
+        [projetoId, projetoId, projetoId]
+      );
 
       if (!projeto) {
         return { erro: 'Projeto não encontrado' };
       }
 
       // Obter gastos por categoria
-      const gastosPorCategoria = await new Promise((resolve, reject) => {
-        db.all(
-          `SELECT categoria, SUM(valor) as total
-          FROM gastos
-          WHERE projeto_id = ?
-          GROUP BY categoria`,
-          [projetoId],
-          (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows);
-          }
-        );
-      });
+      const gastosPorCategoria = await db.promiseAll(
+        `SELECT categoria, SUM(valor) as total
+        FROM gastos
+        WHERE projeto_id = ?
+        GROUP BY categoria`,
+        [projetoId]
+      );
 
       // Preparar dados para análise
       const lucroLiquido = projeto.valor_receber - projeto.total_gastos - projeto.custo_mao_obra;
       const margemLucro = ((lucroLiquido / projeto.valor_receber) * 100).toFixed(2);
       const progressoTempo = projeto.status === 'concluido' 
         ? 100 
-        : ((JULIANDAY('now') - JULIANDAY(projeto.data_inicio)) / (projeto.dias_previstos)) * 100;
+        : ((Date.now()/1000 - new Date(projeto.data_inicio).getTime()/1000) / (projeto.dias_previstos * 86400)) * 100;
       
       // Enviar para a OpenAI para análise
       const openai = await this.inicializarOpenAI();
@@ -133,49 +121,36 @@ class IA {
       const { tipo_obra, localidade, tamanho, descricao } = dados;
       
       // Dados históricos de projetos similares
-      const projetosSimilares = await new Promise((resolve, reject) => {
-        db.all(
-          `SELECT 
-            p.tipo, p.localidade, p.valor_receber,
-            (SELECT SUM(valor) FROM gastos WHERE projeto_id = p.id) as total_gastos,
-            (
-              SELECT SUM(
-                CASE 
-                  WHEN t.empreitada = 1 THEN t.valor_empreitada 
-                  ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
-                END
-              )
-              FROM trabalhos t
-              JOIN funcionarios f ON t.funcionario_id = f.id
-              WHERE t.projeto_id = p.id
-            ) as custo_mao_obra,
-            JULIANDAY(COALESCE(p.data_fim_real, CURRENT_DATE)) - JULIANDAY(p.data_inicio) as dias_duracao
-          FROM projetos p
-          WHERE p.tipo LIKE ? AND p.status = 'concluido'
-          LIMIT 5`,
-          [`%${tipo_obra}%`],
-          (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows);
-          }
-        );
-      });
+      const projetosSimilares = await db.promiseAll(
+        `SELECT 
+          p.tipo, p.localidade, p.valor_receber,
+          (SELECT SUM(valor) FROM gastos WHERE projeto_id = p.id) as total_gastos,
+          (
+            SELECT SUM(
+              CASE 
+                WHEN t.empreitada = 1 THEN t.valor_empreitada 
+                ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
+              END
+            )
+            FROM trabalhos t
+            JOIN funcionarios f ON t.funcionario_id = f.id
+            WHERE t.projeto_id = p.id
+          ) as custo_mao_obra,
+          (strftime('%s', COALESCE(p.data_fim_real, CURRENT_DATE)) - strftime('%s', p.data_inicio)) / 86400.0 as dias_duracao
+        FROM projetos p
+        WHERE p.tipo LIKE ? AND p.status = 'concluido'
+        LIMIT 5`,
+        [`%${tipo_obra}%`]
+      ) || [];
 
       // Obter preço médio por diária dos funcionários
-      const dadosFuncionarios = await new Promise((resolve, reject) => {
-        db.get(
-          `SELECT 
-            AVG(valor_diaria) as media_diaria,
-            AVG(valor_hora_extra) as media_hora_extra,
-            AVG(valor_empreitada) as media_empreitada
-          FROM funcionarios`,
-          [],
-          (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-          }
-        );
-      });
+      const dadosFuncionarios = await db.promiseGet(
+        `SELECT 
+          AVG(valor_diaria) as media_diaria,
+          AVG(valor_hora_extra) as media_hora_extra,
+          AVG(valor_empreitada) as media_empreitada
+        FROM funcionarios`
+      ) || { media_diaria: 0, media_hora_extra: 0, media_empreitada: 0 };
 
       // Enviar para OpenAI para geração de orçamento
       const openai = await this.inicializarOpenAI();
@@ -241,89 +216,61 @@ class IA {
   static async getSugestoesDashboard() {
     try {
       // Obter indicadores do dashboard
-      const indicadores = await new Promise((resolve, reject) => {
-        db.get(
-          `SELECT 
-            (SELECT COUNT(*) FROM projetos WHERE status = 'em_andamento') as projetos_andamento,
-            (SELECT COUNT(*) FROM projetos WHERE status = 'concluido') as projetos_concluidos,
-            (SELECT SUM(valor_receber) FROM projetos) as receita_total,
-            (SELECT SUM(valor) FROM gastos) as gastos_totais,
-            (SELECT COUNT(*) FROM funcionarios) as total_funcionarios
-          FROM projetos LIMIT 1`,
-          [],
-          (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
-          }
-        );
-      });
+      const indicadores = await db.promiseGet(
+        `SELECT 
+          (SELECT COUNT(*) FROM projetos WHERE status = 'em_andamento') as projetos_andamento,
+          (SELECT COUNT(*) FROM projetos WHERE status = 'concluido') as projetos_concluidos,
+          (SELECT SUM(valor_receber) FROM projetos) as receita_total,
+          (SELECT SUM(valor) FROM gastos) as gastos_totais,
+          (SELECT COUNT(*) FROM funcionarios) as total_funcionarios
+        FROM projetos LIMIT 1`
+      ) || { projetos_andamento: 0, projetos_concluidos: 0, receita_total: 0, gastos_totais: 0, total_funcionarios: 0 };
 
       // Projetos que estão perto do prazo final
-      const projetosUrgentes = await new Promise((resolve, reject) => {
-        db.all(
-          `SELECT 
-            p.id, p.nome, p.data_fim_prevista, 
-            JULIANDAY(p.data_fim_prevista) - JULIANDAY('now') as dias_restantes,
-            (JULIANDAY('now') - JULIANDAY(p.data_inicio)) / (JULIANDAY(p.data_fim_prevista) - JULIANDAY(p.data_inicio)) * 100 as percentual_tempo_consumido
-          FROM projetos p
-          WHERE p.status = 'em_andamento'
-          AND JULIANDAY(p.data_fim_prevista) - JULIANDAY('now') < 10
-          ORDER BY dias_restantes ASC
-          LIMIT 3`,
-          [],
-          (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows);
-          }
-        );
-      });
+      const projetosUrgentes = await db.promiseAll(
+        `SELECT 
+          p.id, p.nome, p.data_fim_prevista, 
+          (strftime('%s', p.data_fim_prevista) - strftime('%s', 'now')) / 86400.0 as dias_restantes,
+          (strftime('%s', 'now') - strftime('%s', p.data_inicio)) / (strftime('%s', p.data_fim_prevista) - strftime('%s', p.data_inicio)) * 100 as percentual_tempo_consumido
+        FROM projetos p
+        WHERE p.status = 'em_andamento'
+        AND (strftime('%s', p.data_fim_prevista) - strftime('%s', 'now')) / 86400.0 < 10
+        ORDER BY dias_restantes ASC
+        LIMIT 3`
+      ) || [];
 
       // Projetos com possíveis problemas de lucratividade
-      const projetosComProblemas = await new Promise((resolve, reject) => {
-        db.all(
-          `SELECT 
-            p.id, p.nome, p.valor_receber,
-            (SELECT SUM(valor) FROM gastos WHERE projeto_id = p.id) as gastos,
-            (
-              SELECT SUM(
-                CASE 
-                  WHEN t.empreitada = 1 THEN t.valor_empreitada 
-                  ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
-                END
-              )
-              FROM trabalhos t
-              JOIN funcionarios f ON t.funcionario_id = f.id
-              WHERE t.projeto_id = p.id
-            ) as custo_mao_obra
-          FROM projetos p
-          WHERE p.status = 'em_andamento'
-          HAVING (gastos + custo_mao_obra) > (p.valor_receber * 0.8)
-          LIMIT 3`,
-          [],
-          (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows);
-          }
-        );
-      });
+      const projetosComProblemas = await db.promiseAll(
+        `SELECT 
+          p.id, p.nome, p.valor_receber,
+          (SELECT SUM(valor) FROM gastos WHERE projeto_id = p.id) as gastos,
+          (
+            SELECT SUM(
+              CASE 
+                WHEN t.empreitada = 1 THEN t.valor_empreitada 
+                ELSE (t.dias_trabalhados * f.valor_diaria) + (t.horas_extras * f.valor_hora_extra)
+              END
+            )
+            FROM trabalhos t
+            JOIN funcionarios f ON t.funcionario_id = f.id
+            WHERE t.projeto_id = p.id
+          ) as custo_mao_obra
+        FROM projetos p
+        WHERE p.status = 'em_andamento'
+        HAVING (gastos + custo_mao_obra) > (p.valor_receber * 0.8)
+        LIMIT 3`
+      ) || [];
 
       // Funcionários com muitos adiantamentos
-      const funcionariosComAdiantamentos = await new Promise((resolve, reject) => {
-        db.all(
-          `SELECT 
-            f.id, f.nome,
-            (SELECT SUM(valor) FROM adiantamentos WHERE funcionario_id = f.id AND data > date('now', '-30 day')) as total_adiantamentos
-          FROM funcionarios f
-          HAVING total_adiantamentos > 0
-          ORDER BY total_adiantamentos DESC
-          LIMIT 3`,
-          [],
-          (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows);
-          }
-        );
-      });
+      const funcionariosComAdiantamentos = await db.promiseAll(
+        `SELECT 
+          f.id, f.nome,
+          (SELECT SUM(valor) FROM adiantamentos WHERE funcionario_id = f.id AND data > date('now', '-30 day')) as total_adiantamentos
+        FROM funcionarios f
+        HAVING total_adiantamentos > 0
+        ORDER BY total_adiantamentos DESC
+        LIMIT 3`
+      ) || [];
 
       // Compilar todas as sugestões
       const sugestoes = [

@@ -1,0 +1,55 @@
+<!-- Formulário para gerar orçamento com IA -->
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="fas fa-robot me-2"></i>Gerar Orçamento com IA</h4>
+      </div>
+      <div class="card-body">
+        <% if (typeof error !== 'undefined' && error) { %>
+          <div class="alert alert-danger"><%= error %></div>
+        <% } %>
+        <form action="/orcamentos/gerar-ia" method="POST">
+          <div class="mb-3">
+            <label for="cliente_id" class="form-label">Cliente</label>
+            <select class="form-select" id="cliente_id" name="cliente_id" required>
+              <% if (clientes && clientes.length > 0) { %>
+                <% clientes.forEach(function(cliente) { %>
+                  <option value="<%= cliente.id %>" <%= (dados && dados.cliente_id == cliente.id) ? 'selected' : '' %>><%= cliente.nome %></option>
+                <% }); %>
+              <% } else { %>
+                <option value="">Nenhum cliente disponível</option>
+              <% } %>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="tipo_obra" class="form-label">Tipo de Obra</label>
+            <input type="text" class="form-control" id="tipo_obra" name="tipo_obra" value="<%= dados?.tipo_obra || '' %>" required placeholder="Ex: Reforma residencial, Construção comercial">
+          </div>
+          <div class="mb-3">
+            <label for="localidade" class="form-label">Localidade</label>
+            <input type="text" class="form-control" id="localidade" name="localidade" value="<%= dados?.localidade || '' %>" required placeholder="Ex: São Paulo, SP">
+          </div>
+          <div class="mb-3">
+            <label for="tamanho" class="form-label">Tamanho/Escopo</label>
+            <input type="text" class="form-control" id="tamanho" name="tamanho" value="<%= dados?.tamanho || '' %>" required placeholder="Ex: 100m², 3 cômodos">
+          </div>
+          <div class="mb-3">
+            <label for="descricao" class="form-label">Descrição Detalhada</label>
+            <textarea class="form-control" id="descricao" name="descricao" rows="4" placeholder="Descreva detalhes específicos do projeto..."><%= dados?.descricao || '' %></textarea>
+          </div>
+          <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            Este recurso utiliza inteligência artificial para gerar um orçamento estimado com base em projetos similares. Os valores são apenas referências e podem precisar de ajustes.
+          </div>
+          <div class="d-flex justify-content-between">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-magic me-2"></i>Gerar Orçamento
+            </button>
+            <a href="/orcamentos" class="btn btn-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
