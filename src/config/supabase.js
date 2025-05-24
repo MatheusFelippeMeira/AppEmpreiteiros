@@ -18,7 +18,8 @@ async function testConnection() {
       return false;
     }
     
-    const { data, error } = await supabase.from('usuarios').select('count(*)', { count: 'exact' });
+    // Consulta simples sem usar count(*) que estava causando o erro
+    const { data, error } = await supabase.from('usuarios').select('id').limit(1);
     
     if (error) {
       console.error('ERRO na conexão com Supabase:', error.message);
@@ -44,8 +45,12 @@ const db = {
       const tableName = sql.match(/FROM\s+(\w+)/i)?.[1];
       if (!tableName) throw new Error('Tabela não encontrada na query');
       
+      console.log('promiseAll - Consultando tabela:', tableName);
       const { data, error } = await supabase.from(tableName).select('*');
-      if (error) throw error;
+      if (error) {
+        console.error('Erro na consulta Supabase:', error.message);
+        throw error;
+      }
       return data;
     } catch (err) {
       console.error('Erro em promiseAll:', err);
@@ -60,14 +65,31 @@ const db = {
       
       if (!tableName) throw new Error('Tabela não encontrada na query');
       
+      console.log('promiseGet - Consultando tabela:', tableName);
+      console.log('promiseGet - SQL original:', sql);
+      console.log('promiseGet - Parâmetros:', params);
+      
       if (idMatch && params.length > 0) {
-        const { data, error } = await supabase.from(tableName).select('*').eq('id', params[0]).single();
-        if (error) throw error;
-        return data;
+        console.log('promiseGet - Buscando por ID:', params[0]);
+        const { data, error } = await supabase.from(tableName).select('*').eq('id', params[0]);
+        
+        if (error) {
+          console.error('Erro na consulta Supabase por ID:', error.message);
+          throw error;
+        }
+        
+        // Não usar single() que pode causar erro se não encontrar
+        return data && data.length > 0 ? data[0] : null;
       } else {
-        const { data, error } = await supabase.from(tableName).select('*').limit(1).single();
-        if (error) throw error;
-        return data;
+        console.log('promiseGet - Buscando primeiro registro');
+        const { data, error } = await supabase.from(tableName).select('*').limit(1);
+        
+        if (error) {
+          console.error('Erro na consulta Supabase limit:', error.message);
+          throw error;
+        }
+        
+        return data && data.length > 0 ? data[0] : null;
       }
     } catch (err) {
       console.error('Erro em promiseGet:', err);
@@ -137,7 +159,8 @@ const db = {
   
   tableExists: async (tableName) => {
     try {
-      const { data, error } = await supabase.from(tableName).select('count(*)', { count: 'exact', head: true });
+      // Usando select('id') em vez de count(*) para evitar o erro de análise
+      const { data, error } = await supabase.from(tableName).select('id').limit(1);
       return !error;
     } catch (err) {
       console.error(`Erro ao verificar existência da tabela ${tableName}:`, err);

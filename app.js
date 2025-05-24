@@ -25,6 +25,12 @@ const db = require('./src/config/database');
 
 // Importar configuração do Supabase
 const { supabase, testConnection } = require('./src/config/supabase');
+
+// Verificar se as variáveis de ambiente estão definidas
+console.log('[ENV-CHECK] Variáveis de ambiente:');
+console.log('[ENV-CHECK] NODE_ENV:', process.env.NODE_ENV || 'não definido');
+console.log('[ENV-CHECK] SUPABASE_URL definido:', !!process.env.SUPABASE_URL);
+console.log('[ENV-CHECK] SUPABASE_KEY definido:', !!process.env.SUPABASE_KEY);
 const { authMiddleware } = require('./src/utils/authUtils');
 
 // Testar conexão com Supabase se as credenciais estiverem disponíveis
