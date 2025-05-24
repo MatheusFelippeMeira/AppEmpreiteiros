@@ -5,16 +5,8 @@
     </a>
 </div>
 
+<!-- Comentário EJS corrigido -->
 <%# Exibir mensagens flash (já incluídas no layout main.ejs, mas pode ser útil ter aqui também se necessário) %>
-<%/* 
-Este é um exemplo de como exibir mensagens flash:
-if (typeof success_msg !== 'undefined' && success_msg.length > 0) { 
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <%= success_msg %>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
-    </div>
-} 
-*/%>
 
 <div class="card shadow-sm">
     <div class="card-body">
@@ -32,7 +24,7 @@ if (typeof success_msg !== 'undefined' && success_msg.length > 0) {
                         </tr>
                     </thead>
                     <tbody>
-                        <% funcionarios.forEach(func => { %>
+                        <% funcionarios.forEach(function(func) { %>
                             <tr>
                                 <td><%= func.nome %></td>
                                 <td><%= func.funcao || '-' %></td>
