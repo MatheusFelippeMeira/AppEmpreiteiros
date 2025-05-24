@@ -7,10 +7,17 @@ class Projeto {
                 LEFT JOIN clientes c ON p.cliente_id = c.id 
                 ORDER BY p.data_inicio DESC`;
     try {
+      // Verificar se a tabela existe
+      const tableExists = await db.tableExists('projetos');
+      if (!tableExists) {
+        console.warn('Tabela projetos não existe');
+        return [];
+      }
+      
       return await db.promiseAll(sql, []);
     } catch (err) {
       console.error('Erro ao buscar projetos:', err);
-      throw err;
+      return []; // Retornar array vazio em vez de lançar erro
     }
   }
 
@@ -20,20 +27,43 @@ class Projeto {
                 LEFT JOIN clientes c ON p.cliente_id = c.id 
                 WHERE p.id = ?`;
     try {
+      // Verificar se a tabela existe
+      const tableExists = await db.tableExists('projetos');
+      if (!tableExists) {
+        console.warn('Tabela projetos não existe');
+        return null;
+      }
+      
       return await db.promiseGet(sql, [id]);
     } catch (err) {
       console.error(`Erro ao buscar projeto ID ${id}:`, err);
-      throw err;
+      return null; // Retornar null em vez de lançar erro
     }
   }
 
   static async create(projeto) {
     const { nome, cliente_id, localidade, tipo, data_inicio, data_fim_prevista, valor_receber, deslocamento_incluido } = projeto;
-    const sql = `INSERT INTO projetos (nome, cliente_id, localidade, tipo, data_inicio, data_fim_prevista, valor_receber, deslocamento_incluido)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO projetos (nome, cliente_id, localidade, tipo, data_inicio, data_fim_prevista, valor_receber, deslocamento_incluido, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     
     try {
-      const result = await db.promiseRun(sql, [nome, cliente_id, localidade, tipo, data_inicio, data_fim_prevista, valor_receber, deslocamento_incluido ? 1 : 0]);
+      // Verificar se a tabela existe
+      const tableExists = await db.tableExists('projetos');
+      if (!tableExists) {
+        throw new Error('Tabela projetos não existe');
+      }
+      
+      const result = await db.promiseRun(sql, [
+        nome, 
+        cliente_id || null, 
+        localidade || '', 
+        tipo || '', 
+        data_inicio, 
+        data_fim_prevista || null, 
+        valor_receber || 0, 
+        deslocamento_incluido ? 1 : 0,
+        'em_andamento'
+      ]);
       return result.lastID;
     } catch (err) {
       console.error('Erro ao criar projeto:', err);
@@ -59,8 +89,19 @@ class Projeto {
                 WHERE id = ?`;
     
     try {
-      return await db.promiseRun(sql, [nome, cliente_id, localidade, tipo, data_inicio, data_fim_prevista, 
-        data_fim_real, valor_receber, deslocamento_incluido ? 1 : 0, status, id]);
+      return await db.promiseRun(sql, [
+        nome, 
+        cliente_id || null, 
+        localidade || '', 
+        tipo || '', 
+        data_inicio, 
+        data_fim_prevista || null, 
+        data_fim_real || null, 
+        valor_receber || 0, 
+        deslocamento_incluido ? 1 : 0, 
+        status || 'em_andamento', 
+        id
+      ]);
     } catch (err) {
       console.error(`Erro ao atualizar projeto ID ${id}:`, err);
       throw err;
@@ -81,10 +122,17 @@ class Projeto {
   static async getGastos(id) {
     const sql = `SELECT * FROM gastos WHERE projeto_id = ? ORDER BY data DESC`;
     try {
+      // Verificar se a tabela existe
+      const tableExists = await db.tableExists('gastos');
+      if (!tableExists) {
+        console.warn('Tabela gastos não existe');
+        return [];
+      }
+      
       return await db.promiseAll(sql, [id]);
     } catch (err) {
       console.error(`Erro ao buscar gastos do projeto ID ${id}:`, err);
-      throw err;
+      return []; // Retornar array vazio em vez de lançar erro
     }
   }
 
@@ -96,10 +144,19 @@ class Projeto {
                 ORDER BY t.data DESC`;
     
     try {
+      // Verificar se as tabelas existem
+      const trabalhosExists = await db.tableExists('trabalhos');
+      const funcionariosExists = await db.tableExists('funcionarios');
+      
+      if (!trabalhosExists || !funcionariosExists) {
+        console.warn('Tabela trabalhos ou funcionarios não existe');
+        return [];
+      }
+      
       return await db.promiseAll(sql, [id]);
     } catch (err) {
       console.error(`Erro ao buscar trabalhos do projeto ID ${id}:`, err);
-      throw err;
+      return []; // Retornar array vazio em vez de lançar erro
     }
   }
 
@@ -110,7 +167,20 @@ class Projeto {
                 VALUES (?, ?, ?, ?, ?, ?)`;
     
     try {
-      const result = await db.promiseRun(sql, [projeto_id, categoria, descricao, valor, data, comprovante_url]);
+      // Verificar se a tabela existe
+      const tableExists = await db.tableExists('gastos');
+      if (!tableExists) {
+        throw new Error('Tabela gastos não existe');
+      }
+      
+      const result = await db.promiseRun(sql, [
+        projeto_id, 
+        categoria || 'outros', 
+        descricao || '', 
+        valor || 0, 
+        data, 
+        comprovante_url || null
+      ]);
       return result.lastID;
     } catch (err) {
       console.error('Erro ao registrar gasto:', err);
@@ -119,9 +189,26 @@ class Projeto {
   }
 
   static async calcularLucratividade(id) {
-    const sql = `SELECT 
+    try {
+      // Verificar se as tabelas existem
+      const projetosExists = await db.tableExists('projetos');
+      const gastosExists = await db.tableExists('gastos');
+      const trabalhosExists = await db.tableExists('trabalhos');
+      const funcionariosExists = await db.tableExists('funcionarios');
+      
+      if (!projetosExists || !gastosExists || !trabalhosExists || !funcionariosExists) {
+        console.warn('Uma ou mais tabelas necessárias não existem');
+        return {
+          nome: '',
+          valor_receber: 0,
+          total_gastos: 0,
+          custo_mao_obra: 0
+        };
+      }
+      
+      const sql = `SELECT 
                   p.nome, p.valor_receber,
-                  (SELECT SUM(valor) FROM gastos WHERE projeto_id = ?) as total_gastos,
+                  COALESCE((SELECT SUM(valor) FROM gastos WHERE projeto_id = ?), 0) as total_gastos,
                   COALESCE((
                     SELECT SUM(
                       CASE 
@@ -135,12 +222,22 @@ class Projeto {
                   ), 0) as custo_mao_obra
                 FROM projetos p
                 WHERE p.id = ?`;
-    
-    try {
-      return await db.promiseGet(sql, [id, id, id]);
+      
+      const result = await db.promiseGet(sql, [id, id, id]);
+      return result || {
+        nome: '',
+        valor_receber: 0,
+        total_gastos: 0,
+        custo_mao_obra: 0
+      };
     } catch (err) {
       console.error(`Erro ao calcular lucratividade do projeto ID ${id}:`, err);
-      throw err;
+      return {
+        nome: '',
+        valor_receber: 0,
+        total_gastos: 0,
+        custo_mao_obra: 0
+      };
     }
   }
 
@@ -153,6 +250,15 @@ class Projeto {
                 ORDER BY p.data_inicio DESC`;
     
     try {
+      // Verificar se as tabelas existem
+      const projetosExists = await db.tableExists('projetos');
+      const clientesExists = await db.tableExists('clientes');
+      
+      if (!projetosExists || !clientesExists) {
+        console.warn('Tabela projetos ou clientes não existe');
+        return [];
+      }
+      
       return await db.promiseAll(sql, []);
     } catch (err) {
       console.error('Erro ao buscar projetos em andamento:', err);
@@ -161,15 +267,25 @@ class Projeto {
   }
 
   static async getProjetosConcluidos() {
-    const sql = `SELECT p.*, c.nome as cliente_nome,
-                JULIANDAY(p.data_fim_real) - JULIANDAY(p.data_inicio) as dias_duracao,
-                JULIANDAY(p.data_fim_prevista) - JULIANDAY(p.data_inicio) as dias_previstos
-                FROM projetos p 
-                LEFT JOIN clientes c ON p.cliente_id = c.id 
-                WHERE p.status = 'concluido'
-                ORDER BY p.data_fim_real DESC`;
-    
     try {
+      // Verificar se as tabelas existem
+      const projetosExists = await db.tableExists('projetos');
+      const clientesExists = await db.tableExists('clientes');
+      
+      if (!projetosExists || !clientesExists) {
+        console.warn('Tabela projetos ou clientes não existe');
+        return [];
+      }
+      
+      // Usar strftime em vez de JULIANDAY para maior compatibilidade
+      const sql = `SELECT p.*, c.nome as cliente_nome,
+                  (strftime('%s', p.data_fim_real) - strftime('%s', p.data_inicio)) / 86400.0 as dias_duracao,
+                  (strftime('%s', p.data_fim_prevista) - strftime('%s', p.data_inicio)) / 86400.0 as dias_previstos
+                  FROM projetos p 
+                  LEFT JOIN clientes c ON p.cliente_id = c.id 
+                  WHERE p.status = 'concluido'
+                  ORDER BY p.data_fim_real DESC`;
+      
       return await db.promiseAll(sql, []);
     } catch (err) {
       console.error('Erro ao buscar projetos concluídos:', err);

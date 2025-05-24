@@ -14,6 +14,9 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
+    <!-- Script de inicialização -->
+    <script src="/js/app-init.js"></script>
+    
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
@@ -47,6 +50,18 @@
             </div>
         <% } %>
 
+        <% if (typeof error_msg !== 'undefined' && error_msg.length > 0) { %>
+            <div class="alert alert-danger">
+                <%= error_msg %>
+            </div>
+        <% } %>
+
+        <% if (typeof success_msg !== 'undefined' && success_msg.length > 0) { %>
+            <div class="alert alert-success">
+                <%= success_msg %>
+            </div>
+        <% } %>
+
         <!-- Conteúdo da página -->
         <%- body %>
     </main>
@@ -68,5 +83,8 @@
     <% if (typeof pageScripts !== 'undefined') { %>
         <%- pageScripts %>
     <% } %>
+    
+    <!-- Toast container para notificações -->
+    <div id="toast-container" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
 </body>
 </html>
