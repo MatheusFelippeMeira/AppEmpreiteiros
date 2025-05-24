@@ -85,21 +85,4 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 5000);
 });
 
-// Adicionar estilos para modo offline
-const offlineStyles = document.createElement('style');
-offlineStyles.textContent = `
-  .offline-mode:before {
-    content: "Você está offline. Tentando reconectar...";
-    display: block;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    background-color: #f8d7da;
-    color: #721c24;
-    padding: 10px;
-    text-align: center;
-    z-index: 9999;
-  }
-`;
-document.head.appendChild(offlineStyles);
+// Estilos para modo offline são definidos no error-handler.js

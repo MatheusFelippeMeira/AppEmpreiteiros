@@ -89,56 +89,5 @@
     
     <!-- Toast container para notificações -->
     <div id="toast-container" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
-    
-    <!-- Script para tratamento de erros no conteúdo da página -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            try {
-                // Verificar se o conteúdo da página foi carregado corretamente
-                const pageContent = document.getElementById('page-content');
-                if (!pageContent || pageContent.innerHTML.trim() === '') {
-                    throw new Error('Conteúdo da página não foi carregado corretamente');
-                }
-                
-                // Verificar se há erros de sintaxe no conteúdo
-                const scripts = pageContent.querySelectorAll('script');
-                scripts.forEach(function(script) {
-                    try {
-                        // Tentar avaliar o script para verificar erros de sintaxe
-                        if (script.textContent) {
-                            new Function(script.textContent);
-                        }
-                    } catch (scriptError) {
-                        console.error('Erro de sintaxe em script da página:', scriptError);
-                        // Criar um limite de erro em torno do script
-                        if (typeof errorHandler !== 'undefined' && errorHandler.createErrorBoundary) {
-                            errorHandler.createErrorBoundary(script, 'Erro de sintaxe no script: ' + scriptError.message);
-                        }
-                    }
-                });
-            } catch (error) {
-                console.error('Erro ao carregar conteúdo da página:', error);
-                // Mostrar mensagem de erro
-                const mainContent = document.querySelector('main.container');
-                if (mainContent) {
-                    const errorAlert = document.createElement('div');
-                    errorAlert.className = 'alert alert-danger';
-                    errorAlert.textContent = 'Erro ao carregar o conteúdo da página. Por favor, tente recarregar.';
-                    
-                    const reloadButton = document.createElement('button');
-                    reloadButton.className = 'btn btn-danger mt-2';
-                    reloadButton.textContent = 'Recarregar página';
-                    reloadButton.addEventListener('click', function() {
-                        window.location.reload();
-                    });
-                    
-                    errorAlert.appendChild(document.createElement('br'));
-                    errorAlert.appendChild(reloadButton);
-                    
-                    mainContent.prepend(errorAlert);
-                }
-            }
-        });
-    </script>
 </body>
 </html>

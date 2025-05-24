@@ -2,31 +2,26 @@
 
 Sistema de gestão para empreiteiros e construtoras.
 
-## Atualizações Recentes
+## Instalação
 
-### Correções no Módulo de Orçamentos
+1. Clone o repositório
+2. Instale as dependências:
+   ```
+   npm install
+   ```
+3. Inicialize o banco de dados:
+   ```
+   node init_database.js
+   ```
+4. Execute o aplicativo:
+   ```
+   node app.js
+   ```
 
-Foram realizadas as seguintes correções e melhorias:
+## Credenciais padrão
 
-1. **Correção da estrutura HTML** nos formulários de orçamentos
-2. **Padronização do campo valor_total** em vez de valor_estimado
-3. **Adição de novos campos** como tipo_obra, localidade e projeto_id
-4. **Criação da página de detalhes** de orçamentos
-5. **Implementação da geração de orçamentos com IA**
-6. **Melhoria no tratamento de erros** e validação de dados
-
-### Como Atualizar o Banco de Dados
-
-Para aplicar as alterações no banco de dados, execute:
-
-```
-node update_database.js
-```
-
-Este script irá:
-- Renomear a coluna valor_estimado para valor_total
-- Adicionar as colunas tipo_obra, localidade e projeto_id
-- Criar índices para melhorar a performance
+- Email: admin@exemplo.com
+- Senha: admin123
 
 ## Funcionalidades
 
@@ -42,12 +37,27 @@ Este script irá:
 - Node.js 14+
 - SQLite3
 
-## Instalação
+## Estrutura do Banco de Dados
 
-1. Clone o repositório
-2. Instale as dependências: `npm install`
-3. Configure o arquivo .env com base no .env.example
-4. Execute o aplicativo: `node app.js`
+O sistema utiliza SQLite como banco de dados. As principais tabelas são:
+
+- `usuarios`: Armazena os usuários do sistema
+- `clientes`: Cadastro de clientes
+- `projetos`: Projetos/obras em andamento ou concluídos
+- `funcionarios`: Cadastro de funcionários
+- `orcamentos`: Orçamentos gerados para clientes
+- `orcamento_itens`: Itens detalhados dos orçamentos
+- `gastos`: Registro de gastos por projeto
+- `trabalhos`: Registro de trabalhos realizados por funcionários
+- `adiantamentos`: Registro de adiantamentos para funcionários
+
+## Solução de Problemas
+
+Se você encontrar o erro "tabela não existe", execute o script de inicialização do banco de dados:
+
+```
+node init_database.js
+```
 
 ## Licença
 
